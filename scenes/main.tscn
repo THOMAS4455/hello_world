@@ -1,0 +1,131 @@
+[gd_scene load_steps=10 format=3 uid="uid://rts_main_scene"]
+
+[ext_resource type="Script" path="res://scenes/camera/game_camera.gd" id="1_camera"]
+[ext_resource type="Script" path="res://scenes/node/game_node.gd" id="2_node"]
+[ext_resource type="Script" path="res://scenes/main.gd" id="3_main"]
+[ext_resource type="Script" path="res://scenes/input/rts_controller.gd" id="4_rts"]
+[ext_resource type="Script" path="res://scenes/ui/hud.gd" id="5_hud"]
+[ext_resource type="Script" path="res://scenes/ui/race_select.gd" id="6_race"]
+[ext_resource type="Script" path="res://scenes/ui/game_over.gd" id="7_over"]
+[ext_resource type="Script" path="res://scenes/commander/commander.gd" id="8_commander"]
+[ext_resource type="Script" path="res://scenes/ai/enemy_ai.gd" id="9_ai"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("3_main")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(960, 540)
+script = ExtResource("1_camera")
+
+[node name="RTSController" type="Node2D" parent="."]
+script = ExtResource("4_rts")
+
+[node name="Commander" type="Node2D" parent="."]
+script = ExtResource("8_commander")
+
+[node name="EnemyAI" type="Node" parent="."]
+script = ExtResource("9_ai")
+
+[node name="Battlefield" type="Node2D" parent="."]
+
+[node name="Background" type="ColorRect" parent="Battlefield"]
+size = Vector2(1920, 1080)
+position = Vector2(-960, -540)
+color = Color(0.08, 0.1, 0.05, 1)
+
+[node name="Roads" type="Node2D" parent="Battlefield"]
+
+[node name="Nodes" type="Node2D" parent="Battlefield"]
+
+[node name="PlayerMainCastle" type="Node2D" parent="Battlefield/Nodes"]
+position = Vector2(150, 400)
+script = ExtResource("2_node")
+node_id = "player_main"
+node_name = "Player Stronghold"
+node_type = 0
+max_hp = 1000
+gold_per_tick = 8
+
+[node name="EnemyMainCastle" type="Node2D" parent="Battlefield/Nodes"]
+position = Vector2(1750, 400)
+script = ExtResource("2_node")
+node_id = "enemy_main"
+node_name = "Enemy Stronghold"
+node_type = 0
+max_hp = 1000
+gold_per_tick = 8
+
+[node name="NeutralCastle" type="Node2D" parent="Battlefield/Nodes"]
+position = Vector2(600, 400)
+script = ExtResource("2_node")
+node_id = "neutral_castle"
+node_name = "Neutral Castle"
+node_type = 1
+max_hp = 300
+gold_per_tick = 4
+
+[node name="GoldMine" type="Node2D" parent="Battlefield/Nodes"]
+position = Vector2(600, 200)
+script = ExtResource("2_node")
+node_id = "gold_mine"
+node_name = "Gold Mine"
+node_type = 2
+max_hp = 150
+gold_per_tick = 8
+
+[node name="MagicSpring" type="Node2D" parent="Battlefield/Nodes"]
+position = Vector2(950, 700)
+script = ExtResource("2_node")
+node_id = "magic_spring"
+node_name = "Magic Spring"
+node_type = 3
+max_hp = 200
+gold_per_tick = 2
+bonus_effect = "attack_speed_10"
+
+[node name="Barracks" type="Node2D" parent="Battlefield/Nodes"]
+position = Vector2(1300, 200)
+script = ExtResource("2_node")
+node_id = "barracks"
+node_name = "Barracks"
+node_type = 4
+max_hp = 250
+gold_per_tick = 1
+bonus_effect = "unit_cost_-20"
+
+[node name="LumberMill" type="Node2D" parent="Battlefield/Nodes"]
+position = Vector2(1300, 600)
+script = ExtResource("2_node")
+node_id = "lumber_mill"
+node_name = "Lumber Mill"
+node_type = 5
+max_hp = 150
+gold_per_tick = 5
+
+[node name="Units" type="Node2D" parent="Battlefield"]
+y_sort_enabled = true
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="HUD" type="Control" parent="UI"]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("5_hud")
+
+[node name="RaceSelect" type="Control" parent="UI"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("6_race")
+
+[node name="GameOver" type="Control" parent="UI"]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("7_over")

@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://ddrb4ytabafow"]
+
+[node name="Test" type="Node2D"]
+
+[node name="Label" type="Label" parent="."]
+text = "If you can read this, the Godot scene loaded correctly."

@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://unit_base_scene"]
+
+[ext_resource type="Script" path="res://scenes/unit/unit_base.gd" id="1_unit"]
+
+[node name="UnitBase" type="Area2D"]
+script = ExtResource("1_unit")
