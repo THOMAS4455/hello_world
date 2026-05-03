@@ -2,7 +2,7 @@ extends Control
 
 var gold_label: Label
 var income_label: Label
-var selected_info: Panel
+var selected_info: PanelContainer
 var selected_label: Label
 var btn_skill1: Button
 var btn_skill2: Button
@@ -16,6 +16,11 @@ var _last_spawn_castle: GameNode = null
 
 
 func _ready():
+	set_anchors_preset(Control.PRESET_FULL_RECT)
+	offset_left = 0
+	offset_top = 0
+	offset_right = 0
+	offset_bottom = 0
 	add_to_group("ui_hud")
 	_build_ui()
 	EventBus.gold_changed.connect(_on_gold_changed)
@@ -23,114 +28,138 @@ func _ready():
 
 
 func _build_ui():
-	var stylebox = _make_panel()
+	var left_margin = MarginContainer.new()
+	left_margin.anchor_right = 0.0
+	left_margin.anchor_bottom = 0.0
+	left_margin.offset_left = 16
+	left_margin.offset_top = 16
+	left_margin.offset_right = 412
+	left_margin.offset_bottom = 380
+	add_child(left_margin)
 
-	var top_bar = Panel.new()
-	top_bar.position = Vector2(10, 10)
-	top_bar.size = Vector2(380, 70)
-	top_bar.add_theme_stylebox_override("panel", stylebox)
-	add_child(top_bar)
+	var left_stack = VBoxContainer.new()
+	left_stack.add_theme_constant_override("separation", 10)
+	left_margin.add_child(left_stack)
+
+	var top_bar = _make_panel_container()
+	left_stack.add_child(top_bar)
+	var top_content = VBoxContainer.new()
+	top_content.add_theme_constant_override("separation", 6)
+	top_bar.add_child(top_content)
 
 	gold_label = Label.new()
-	gold_label.position = Vector2(15, 8)
-	gold_label.size = Vector2(350, 25)
 	gold_label.text = "Gold: 200"
-	gold_label.add_theme_font_size_override("font_size", 18)
+	gold_label.add_theme_font_size_override("font_size", 20)
 	gold_label.add_theme_color_override("font_color", Color(1, 0.85, 0.3))
-	top_bar.add_child(gold_label)
+	top_content.add_child(gold_label)
 
 	income_label = Label.new()
-	income_label.position = Vector2(15, 38)
-	income_label.size = Vector2(350, 20)
 	income_label.text = "Income: 0/tick"
 	income_label.add_theme_font_size_override("font_size", 14)
 	income_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
-	top_bar.add_child(income_label)
+	top_content.add_child(income_label)
 
-	var skill_panel = Panel.new()
-	skill_panel.position = Vector2(10, 90)
-	skill_panel.size = Vector2(380, 52)
-	skill_panel.add_theme_stylebox_override("panel", stylebox)
-	add_child(skill_panel)
+	var skill_panel = _make_panel_container()
+	left_stack.add_child(skill_panel)
+	var skill_content = VBoxContainer.new()
+	skill_content.add_theme_constant_override("separation", 8)
+	skill_panel.add_child(skill_content)
 
 	var skill_hint = Label.new()
-	skill_hint.position = Vector2(10, 4)
-	skill_hint.size = Vector2(360, 18)
-	skill_hint.text = "Skills (1/2/3, then left click to cast)"
-	skill_hint.add_theme_font_size_override("font_size", 11)
-	skill_hint.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
-	skill_panel.add_child(skill_hint)
+	skill_hint.text = "Skills"
+	skill_hint.add_theme_font_size_override("font_size", 12)
+	skill_hint.add_theme_color_override("font_color", Color(0.65, 0.65, 0.7))
+	skill_content.add_child(skill_hint)
 
-	btn_skill1 = _btn("1. Heal", Vector2(10, 24), Vector2(112, 24))
-	btn_skill2 = _btn("2. Fireball", Vector2(132, 24), Vector2(112, 24))
-	btn_skill3 = _btn("3. War Horn", Vector2(254, 24), Vector2(112, 24))
+	var skill_buttons = HBoxContainer.new()
+	skill_buttons.add_theme_constant_override("separation", 8)
+	skill_content.add_child(skill_buttons)
+
+	btn_skill1 = _btn("1. Heal")
+	btn_skill2 = _btn("2. Fireball")
+	btn_skill3 = _btn("3. War Horn")
 	btn_skill1.pressed.connect(func(): _use_skill(0))
 	btn_skill2.pressed.connect(func(): _use_skill(1))
 	btn_skill3.pressed.connect(func(): _use_skill(2))
-	skill_panel.add_child(btn_skill1)
-	skill_panel.add_child(btn_skill2)
-	skill_panel.add_child(btn_skill3)
+	skill_buttons.add_child(btn_skill1)
+	skill_buttons.add_child(btn_skill2)
+	skill_buttons.add_child(btn_skill3)
 
-	var unit_panel = Panel.new()
-	unit_panel.position = Vector2(10, 152)
-	unit_panel.size = Vector2(380, 65)
-	unit_panel.add_theme_stylebox_override("panel", stylebox)
-	add_child(unit_panel)
+	var unit_panel = _make_panel_container()
+	left_stack.add_child(unit_panel)
+	var unit_content = VBoxContainer.new()
+	unit_content.add_theme_constant_override("separation", 8)
+	unit_panel.add_child(unit_content)
 
 	var unit_hint = Label.new()
-	unit_hint.position = Vector2(10, 4)
-	unit_hint.size = Vector2(360, 18)
 	unit_hint.text = "Recruit Units"
-	unit_hint.add_theme_font_size_override("font_size", 11)
-	unit_hint.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
-	unit_panel.add_child(unit_hint)
+	unit_hint.add_theme_font_size_override("font_size", 12)
+	unit_hint.add_theme_color_override("font_color", Color(0.65, 0.65, 0.7))
+	unit_content.add_child(unit_hint)
 
-	btn_melee = _btn("Swordsman 50g", Vector2(10, 24), Vector2(112, 32))
-	btn_ranged = _btn("Archer 75g", Vector2(132, 24), Vector2(112, 32))
-	btn_cavalry = _btn("Cavalry 100g", Vector2(254, 24), Vector2(112, 32))
+	var unit_buttons = HBoxContainer.new()
+	unit_buttons.add_theme_constant_override("separation", 8)
+	unit_content.add_child(unit_buttons)
+
+	btn_melee = _btn("Swordsman 50g")
+	btn_ranged = _btn("Archer 75g")
+	btn_cavalry = _btn("Cavalry 100g")
 	btn_melee.pressed.connect(_buy_melee)
 	btn_ranged.pressed.connect(_buy_ranged)
 	btn_cavalry.pressed.connect(_buy_cavalry)
-	unit_panel.add_child(btn_melee)
-	unit_panel.add_child(btn_ranged)
-	unit_panel.add_child(btn_cavalry)
+	unit_buttons.add_child(btn_melee)
+	unit_buttons.add_child(btn_ranged)
+	unit_buttons.add_child(btn_cavalry)
 
-	selected_info = Panel.new()
-	selected_info.position = Vector2(10, 227)
-	selected_info.size = Vector2(260, 60)
-	selected_info.add_theme_stylebox_override("panel", stylebox)
+	selected_info = _make_panel_container()
 	selected_info.visible = false
-	add_child(selected_info)
+	left_stack.add_child(selected_info)
 
 	selected_label = Label.new()
-	selected_label.position = Vector2(10, 10)
-	selected_label.size = Vector2(240, 40)
+	selected_label.custom_minimum_size = Vector2(0, 34)
+	selected_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	selected_label.add_theme_font_size_override("font_size", 13)
 	selected_label.add_theme_color_override("font_color", Color.WHITE)
 	selected_info.add_child(selected_label)
 
-	var hint_panel = Panel.new()
-	hint_panel.position = Vector2(1500, 860)
-	hint_panel.size = Vector2(400, 180)
-	hint_panel.add_theme_stylebox_override("panel", stylebox)
-	add_child(hint_panel)
+	var hint_wrap = MarginContainer.new()
+	hint_wrap.anchor_left = 1.0
+	hint_wrap.anchor_top = 1.0
+	hint_wrap.anchor_right = 1.0
+	hint_wrap.anchor_bottom = 1.0
+	hint_wrap.offset_left = -440
+	hint_wrap.offset_top = -220
+	hint_wrap.offset_right = -16
+	hint_wrap.offset_bottom = -16
+	add_child(hint_wrap)
+
+	var hint_panel = _make_panel_container()
+	hint_wrap.add_child(hint_panel)
+
+	var hint_content = VBoxContainer.new()
+	hint_content.add_theme_constant_override("separation", 8)
+	hint_panel.add_child(hint_content)
 
 	var hint_title = Label.new()
-	hint_title.text = "-- Controls --"
-	hint_title.position = Vector2(10, 6)
-	hint_title.size = Vector2(380, 20)
-	hint_title.add_theme_font_size_override("font_size", 14)
-	hint_title.add_theme_color_override("font_color", Color(1, 0.85, 0.3))
+	hint_title.text = "Controls"
 	hint_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint_panel.add_child(hint_title)
+	hint_title.add_theme_font_size_override("font_size", 15)
+	hint_title.add_theme_color_override("font_color", Color(1, 0.85, 0.3))
+	hint_content.add_child(hint_title)
 
 	var hints_text = Label.new()
 	hints_text.text = "Left click or drag to select units\nRight click to move or attack\nRight click enemy nodes to capture\nPress 1/2/3 for commander skills"
-	hints_text.position = Vector2(10, 30)
-	hints_text.size = Vector2(380, 140)
+	hints_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hints_text.add_theme_font_size_override("font_size", 12)
 	hints_text.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
-	hint_panel.add_child(hints_text)
+	hint_content.add_child(hints_text)
+
+
+func _make_panel_container() -> PanelContainer:
+	var panel = PanelContainer.new()
+	panel.custom_minimum_size = Vector2(396, 0)
+	panel.add_theme_stylebox_override("panel", _make_panel())
+	return panel
 
 
 func _make_panel() -> StyleBoxFlat:
@@ -141,14 +170,18 @@ func _make_panel() -> StyleBoxFlat:
 	stylebox.border_width_right = 1
 	stylebox.border_width_bottom = 1
 	stylebox.border_color = Color(0.3, 0.3, 0.45)
+	stylebox.content_margin_left = 12
+	stylebox.content_margin_top = 10
+	stylebox.content_margin_right = 12
+	stylebox.content_margin_bottom = 10
 	return stylebox
 
 
-func _btn(text_value: String, pos: Vector2, size_value: Vector2) -> Button:
+func _btn(text_value: String) -> Button:
 	var button = Button.new()
 	button.text = text_value
-	button.position = pos
-	button.size = size_value
+	button.custom_minimum_size = Vector2(0, 34)
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.add_theme_font_size_override("font_size", 12)
 	return button
 
