@@ -1,3 +1,1 @@
-# hello_world
-a new repository
-
+这是一个游戏制作初学者做的rts平面2d游戏 
