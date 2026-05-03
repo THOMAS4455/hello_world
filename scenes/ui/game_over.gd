@@ -53,14 +53,14 @@ func _ready():
 	content.add_child(_detail)
 
 	_btn_restart = Button.new()
-	_btn_restart.text = "Restart"
+	_btn_restart.text = "重新开始"
 	_btn_restart.custom_minimum_size = Vector2(180, 40)
 	_btn_restart.add_theme_font_size_override("font_size", 16)
 	_btn_restart.pressed.connect(func(): restart_requested.emit())
 	content.add_child(_btn_restart)
 
 	_btn_menu = Button.new()
-	_btn_menu.text = "Back to Menu"
+	_btn_menu.text = "返回菜单"
 	_btn_menu.custom_minimum_size = Vector2(180, 40)
 	_btn_menu.add_theme_font_size_override("font_size", 16)
 	_btn_menu.pressed.connect(func(): back_to_menu.emit())
@@ -91,10 +91,10 @@ func _make_panel_style() -> StyleBoxFlat:
 func _on_game_over(winner: int):
 	visible = true
 	if winner == GameState.Owner.PLAYER:
-		_title.text = "Victory"
+		_title.text = "胜利"
 		_title.add_theme_color_override("font_color", Color(0.2, 0.9, 0.2))
-		_detail.text = "The enemy stronghold has fallen."
+		_detail.text = "敌方主城已被摧毁。"
 	else:
-		_title.text = "Defeat"
+		_title.text = "失败"
 		_title.add_theme_color_override("font_color", Color(0.9, 0.2, 0.2))
-		_detail.text = "Your stronghold has been destroyed."
+		_detail.text = "你的主城已经失守。"

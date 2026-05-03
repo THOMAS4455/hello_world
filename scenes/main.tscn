@@ -41,7 +41,7 @@ color = Color(0.08, 0.1, 0.05, 1)
 position = Vector2(150, 400)
 script = ExtResource("2_node")
 node_id = "player_main"
-node_name = "Player Stronghold"
+node_name = "我方主城"
 node_type = 0
 max_hp = 1000
 gold_per_tick = 8
@@ -50,7 +50,7 @@ gold_per_tick = 8
 position = Vector2(1750, 400)
 script = ExtResource("2_node")
 node_id = "enemy_main"
-node_name = "Enemy Stronghold"
+node_name = "敌方主城"
 node_type = 0
 max_hp = 1000
 gold_per_tick = 8
@@ -59,48 +59,49 @@ gold_per_tick = 8
 position = Vector2(600, 400)
 script = ExtResource("2_node")
 node_id = "neutral_castle"
-node_name = "Neutral Castle"
+node_name = "前线城堡"
 node_type = 1
-max_hp = 300
-gold_per_tick = 4
+max_hp = 380
+gold_per_tick = 5
 
 [node name="GoldMine" type="Node2D" parent="Battlefield/Nodes"]
 position = Vector2(600, 200)
 script = ExtResource("2_node")
 node_id = "gold_mine"
-node_name = "Gold Mine"
+node_name = "金矿"
 node_type = 2
-max_hp = 150
-gold_per_tick = 8
+max_hp = 220
+gold_per_tick = 10
 
 [node name="MagicSpring" type="Node2D" parent="Battlefield/Nodes"]
 position = Vector2(950, 700)
 script = ExtResource("2_node")
 node_id = "magic_spring"
-node_name = "Magic Spring"
+node_name = "秘法泉"
 node_type = 3
-max_hp = 200
-gold_per_tick = 2
-bonus_effect = "attack_speed_10"
+max_hp = 260
+gold_per_tick = 3
+bonus_effect = "skill_haste"
 
 [node name="Barracks" type="Node2D" parent="Battlefield/Nodes"]
 position = Vector2(1300, 200)
 script = ExtResource("2_node")
 node_id = "barracks"
-node_name = "Barracks"
+node_name = "兵营"
 node_type = 4
-max_hp = 250
-gold_per_tick = 1
-bonus_effect = "unit_cost_-20"
+max_hp = 300
+gold_per_tick = 2
+bonus_effect = "unit_cost_discount"
 
 [node name="LumberMill" type="Node2D" parent="Battlefield/Nodes"]
 position = Vector2(1300, 600)
 script = ExtResource("2_node")
 node_id = "lumber_mill"
-node_name = "Lumber Mill"
+node_name = "伐木场"
 node_type = 5
-max_hp = 150
-gold_per_tick = 5
+max_hp = 240
+gold_per_tick = 4
+bonus_effect = "bonus_income"
 
 [node name="Units" type="Node2D" parent="Battlefield"]
 y_sort_enabled = true

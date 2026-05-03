@@ -2,6 +2,9 @@ extends Control
 
 var gold_label: Label
 var income_label: Label
+var objective_label: Label
+var race_label: Label
+var strategy_label: Label
 var selected_info: PanelContainer
 var selected_label: Label
 var btn_skill1: Button
@@ -24,60 +27,84 @@ func _ready():
 	add_to_group("ui_hud")
 	_build_ui()
 	EventBus.gold_changed.connect(_on_gold_changed)
+	EventBus.node_captured.connect(_on_node_captured)
 	_refresh_gold()
+	_refresh_objective()
 
 
 func _build_ui():
+	var top_band = ColorRect.new()
+	top_band.anchor_right = 1.0
+	top_band.offset_bottom = 126
+	top_band.color = Color(0.03, 0.04, 0.05, 0.62)
+	add_child(top_band)
+
 	var left_margin = MarginContainer.new()
 	left_margin.anchor_right = 0.0
 	left_margin.anchor_bottom = 0.0
-	left_margin.offset_left = 16
-	left_margin.offset_top = 16
-	left_margin.offset_right = 332
-	left_margin.offset_bottom = 300
+	left_margin.offset_left = 18
+	left_margin.offset_top = 18
+	left_margin.offset_right = 388
+	left_margin.offset_bottom = 470
 	add_child(left_margin)
 
 	var left_stack = VBoxContainer.new()
-	left_stack.add_theme_constant_override("separation", 10)
+	left_stack.add_theme_constant_override("separation", 12)
 	left_margin.add_child(left_stack)
 
-	var top_bar = _make_panel_container()
-	left_stack.add_child(top_bar)
-	var top_content = VBoxContainer.new()
-	top_content.add_theme_constant_override("separation", 6)
-	top_bar.add_child(top_content)
+	var command_panel = _make_panel_container()
+	left_stack.add_child(command_panel)
 
-	gold_label = Label.new()
-	gold_label.text = "Gold: 200"
-	gold_label.add_theme_font_size_override("font_size", 18)
-	gold_label.add_theme_color_override("font_color", Color(1, 0.85, 0.3))
-	top_content.add_child(gold_label)
+	var command_content = VBoxContainer.new()
+	command_content.add_theme_constant_override("separation", 8)
+	command_panel.add_child(command_content)
 
-	income_label = Label.new()
-	income_label.text = "Income: 0/tick"
-	income_label.add_theme_font_size_override("font_size", 13)
-	income_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
-	top_content.add_child(income_label)
+	var command_title = _section_title("战场总览")
+	command_content.add_child(command_title)
+
+	gold_label = _value_label(20, Color(1, 0.84, 0.32))
+	command_content.add_child(gold_label)
+
+	income_label = _value_label(13, Color(0.76, 0.79, 0.82))
+	command_content.add_child(income_label)
+
+	race_label = _value_label(12, Color(0.68, 0.8, 1.0))
+	command_content.add_child(race_label)
+
+	strategy_label = _value_label(11, Color(0.75, 0.84, 0.75))
+	strategy_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	strategy_label.custom_minimum_size = Vector2(0, 40)
+	command_content.add_child(strategy_label)
+
+	var objective_panel = _make_panel_container()
+	left_stack.add_child(objective_panel)
+
+	var objective_content = VBoxContainer.new()
+	objective_content.add_theme_constant_override("separation", 8)
+	objective_panel.add_child(objective_content)
+
+	objective_content.add_child(_section_title("推进目标"))
+
+	objective_label = _value_label(12, Color(0.87, 0.88, 0.91))
+	objective_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	objective_label.custom_minimum_size = Vector2(0, 52)
+	objective_content.add_child(objective_label)
 
 	var skill_panel = _make_panel_container()
 	left_stack.add_child(skill_panel)
+
 	var skill_content = VBoxContainer.new()
 	skill_content.add_theme_constant_override("separation", 8)
 	skill_panel.add_child(skill_content)
-
-	var skill_hint = Label.new()
-	skill_hint.text = "Skills"
-	skill_hint.add_theme_font_size_override("font_size", 12)
-	skill_hint.add_theme_color_override("font_color", Color(0.65, 0.65, 0.7))
-	skill_content.add_child(skill_hint)
+	skill_content.add_child(_section_title("指挥官军令"))
 
 	var skill_buttons = HBoxContainer.new()
 	skill_buttons.add_theme_constant_override("separation", 8)
 	skill_content.add_child(skill_buttons)
 
-	btn_skill1 = _btn("1. Heal")
-	btn_skill2 = _btn("2. Fireball")
-	btn_skill3 = _btn("3. Horn")
+	btn_skill1 = _command_button("1. 治疗")
+	btn_skill2 = _command_button("2. 火球")
+	btn_skill3 = _command_button("3. 战吼")
 	btn_skill1.pressed.connect(func(): _use_skill(0))
 	btn_skill2.pressed.connect(func(): _use_skill(1))
 	btn_skill3.pressed.connect(func(): _use_skill(2))
@@ -85,25 +112,21 @@ func _build_ui():
 	skill_buttons.add_child(btn_skill2)
 	skill_buttons.add_child(btn_skill3)
 
-	var unit_panel = _make_panel_container()
-	left_stack.add_child(unit_panel)
-	var unit_content = VBoxContainer.new()
-	unit_content.add_theme_constant_override("separation", 8)
-	unit_panel.add_child(unit_content)
+	var recruit_panel = _make_panel_container()
+	left_stack.add_child(recruit_panel)
 
-	var unit_hint = Label.new()
-	unit_hint.text = "Recruit Units"
-	unit_hint.add_theme_font_size_override("font_size", 12)
-	unit_hint.add_theme_color_override("font_color", Color(0.65, 0.65, 0.7))
-	unit_content.add_child(unit_hint)
+	var recruit_content = VBoxContainer.new()
+	recruit_content.add_theme_constant_override("separation", 8)
+	recruit_panel.add_child(recruit_content)
+	recruit_content.add_child(_section_title("征募队列"))
 
 	var unit_buttons = HBoxContainer.new()
 	unit_buttons.add_theme_constant_override("separation", 8)
-	unit_content.add_child(unit_buttons)
+	recruit_content.add_child(unit_buttons)
 
-	btn_melee = _btn("Sword 50g")
-	btn_ranged = _btn("Archer 75g")
-	btn_cavalry = _btn("Cavalry 100g")
+	btn_melee = _command_button("剑士")
+	btn_ranged = _command_button("弓手")
+	btn_cavalry = _command_button("骑兵")
 	btn_melee.pressed.connect(_buy_melee)
 	btn_ranged.pressed.connect(_buy_ranged)
 	btn_cavalry.pressed.connect(_buy_cavalry)
@@ -115,74 +138,97 @@ func _build_ui():
 	selected_info.visible = false
 	left_stack.add_child(selected_info)
 
-	selected_label = Label.new()
-	selected_label.custom_minimum_size = Vector2(0, 34)
+	selected_label = _value_label(13, Color.WHITE)
+	selected_label.custom_minimum_size = Vector2(0, 60)
 	selected_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	selected_label.add_theme_font_size_override("font_size", 13)
-	selected_label.add_theme_color_override("font_color", Color.WHITE)
 	selected_info.add_child(selected_label)
 
-	var hint_wrap = MarginContainer.new()
-	hint_wrap.anchor_left = 1.0
-	hint_wrap.anchor_top = 1.0
-	hint_wrap.anchor_right = 1.0
-	hint_wrap.anchor_bottom = 1.0
-	hint_wrap.offset_left = -340
-	hint_wrap.offset_top = -184
-	hint_wrap.offset_right = -16
-	hint_wrap.offset_bottom = -16
-	add_child(hint_wrap)
+	var help_wrap = MarginContainer.new()
+	help_wrap.anchor_left = 1.0
+	help_wrap.anchor_top = 1.0
+	help_wrap.anchor_right = 1.0
+	help_wrap.anchor_bottom = 1.0
+	help_wrap.offset_left = -362
+	help_wrap.offset_top = -210
+	help_wrap.offset_right = -18
+	help_wrap.offset_bottom = -18
+	add_child(help_wrap)
 
-	var hint_panel = _make_panel_container()
-	hint_wrap.add_child(hint_panel)
+	var help_panel = _make_panel_container()
+	help_wrap.add_child(help_panel)
 
-	var hint_content = VBoxContainer.new()
-	hint_content.add_theme_constant_override("separation", 8)
-	hint_panel.add_child(hint_content)
+	var help_content = VBoxContainer.new()
+	help_content.add_theme_constant_override("separation", 8)
+	help_panel.add_child(help_content)
+	help_content.add_child(_section_title("战场手册"))
 
-	var hint_title = Label.new()
-	hint_title.text = "Controls"
-	hint_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint_title.add_theme_font_size_override("font_size", 15)
-	hint_title.add_theme_color_override("font_color", Color(1, 0.85, 0.3))
-	hint_content.add_child(hint_title)
-
-	var hints_text = Label.new()
-	hints_text.text = "Left click or drag to select units\nRight click to move or attack\nRight click enemy nodes to capture\nPress 1/2/3 for commander skills"
-	hints_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hints_text.add_theme_font_size_override("font_size", 12)
-	hints_text.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
-	hint_content.add_child(hints_text)
+	var help_text = _value_label(12, Color(0.76, 0.78, 0.8))
+	help_text.text = "左键拖拽框选部队\n右键沿道路行军、追击或争夺据点\n先拿金矿和兵营，再压前线城堡\n1/2/3 释放军令，改变局部战局"
+	help_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	help_content.add_child(help_text)
 
 
 func _make_panel_container() -> PanelContainer:
 	var panel = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(316, 0)
+	panel.custom_minimum_size = Vector2(360, 0)
 	panel.add_theme_stylebox_override("panel", _make_panel())
 	return panel
 
 
 func _make_panel() -> StyleBoxFlat:
 	var stylebox = StyleBoxFlat.new()
-	stylebox.bg_color = Color(0.1, 0.1, 0.15, 0.88)
+	stylebox.bg_color = Color(0.08, 0.1, 0.12, 0.9)
 	stylebox.border_width_left = 1
 	stylebox.border_width_top = 1
 	stylebox.border_width_right = 1
 	stylebox.border_width_bottom = 1
-	stylebox.border_color = Color(0.3, 0.3, 0.45)
-	stylebox.content_margin_left = 12
-	stylebox.content_margin_top = 9
-	stylebox.content_margin_right = 12
-	stylebox.content_margin_bottom = 9
+	stylebox.border_color = Color(0.32, 0.37, 0.43, 0.95)
+	stylebox.content_margin_left = 14
+	stylebox.content_margin_top = 12
+	stylebox.content_margin_right = 14
+	stylebox.content_margin_bottom = 12
+	stylebox.set("corner_radius_top_left", 6)
+	stylebox.set("corner_radius_top_right", 6)
+	stylebox.set("corner_radius_bottom_left", 6)
+	stylebox.set("corner_radius_bottom_right", 6)
 	return stylebox
 
 
-func _btn(text_value: String) -> Button:
+func _section_title(text_value: String) -> Label:
+	var label = Label.new()
+	label.text = text_value
+	label.add_theme_font_size_override("font_size", 12)
+	label.add_theme_color_override("font_color", Color(0.94, 0.78, 0.35))
+	return label
+
+
+func _value_label(size: int, color: Color) -> Label:
+	var label = Label.new()
+	label.add_theme_font_size_override("font_size", size)
+	label.add_theme_color_override("font_color", color)
+	return label
+
+
+func _command_button(text_value: String) -> Button:
 	var button = Button.new()
 	button.text = text_value
-	button.custom_minimum_size = Vector2(0, 30)
+	button.custom_minimum_size = Vector2(0, 36)
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.add_theme_font_size_override("font_size", 11)
+	var normal = StyleBoxFlat.new()
+	normal.bg_color = Color(0.15, 0.18, 0.22)
+	normal.border_color = Color(0.38, 0.42, 0.48)
+	normal.border_width_left = 1
+	normal.border_width_top = 1
+	normal.border_width_right = 1
+	normal.border_width_bottom = 1
+	normal.set("corner_radius_top_left", 4)
+	normal.set("corner_radius_top_right", 4)
+	normal.set("corner_radius_bottom_left", 4)
+	normal.set("corner_radius_bottom_right", 4)
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", normal.duplicate())
+	button.add_theme_stylebox_override("pressed", normal.duplicate())
 	return button
 
 
@@ -191,7 +237,9 @@ func _process(_delta):
 		return
 
 	var income = GameState.get_total_income(GameState.Owner.PLAYER)
-	income_label.text = "Income: +%d/tick" % income
+	income_label.text = "收入：+%d / 回合  |  兵力：%d" % [income, GameState.get_unit_count(GameState.Owner.PLAYER)]
+	race_label.text = "%s军势：%s" % [RaceData.get_race_name(GameState.player_race), RaceData.race_passives[GameState.player_race]["name"]]
+	strategy_label.text = _build_strategy_text()
 
 	var rts = get_tree().get_first_node_in_group("rts_controller")
 	if rts and rts.selected_units.size() > 0:
@@ -200,15 +248,13 @@ func _process(_delta):
 		if units.size() == 1:
 			var unit = units[0]
 			if is_instance_valid(unit):
-				selected_label.text = "%s | HP:%d/%d | ATK:%d" % [unit.unit_name, unit.hp, unit.max_hp, unit.attack_power]
+				selected_label.text = "%s\n生命 %d/%d  攻击 %d  防御 %d\n%s" % [unit.unit_name, unit.hp, unit.max_hp, unit.attack_power, unit.defense, unit.description]
 		else:
-			selected_label.text = "Selected: %d units" % units.size()
+			selected_label.text = "已选中 %d 个单位\n保持编队，沿道路推进下一处关键据点。" % units.size()
 	else:
 		selected_info.visible = false
 
-	btn_melee.disabled = not GameState.can_afford(GameState.Owner.PLAYER, 50)
-	btn_ranged.disabled = not GameState.can_afford(GameState.Owner.PLAYER, 75)
-	btn_cavalry.disabled = not GameState.can_afford(GameState.Owner.PLAYER, 100)
+	_refresh_unit_buttons()
 
 
 func _on_gold_changed(owner: int, _amount: int):
@@ -218,12 +264,49 @@ func _on_gold_changed(owner: int, _amount: int):
 
 func _refresh_gold():
 	var income = GameState.get_total_income(GameState.Owner.PLAYER)
-	gold_label.text = "Gold: %d  (+%d/tick)" % [GameState.player_gold, income]
+	gold_label.text = "军费：%d  |  税收：+%d / 回合" % [GameState.player_gold, income]
+
+
+func _refresh_unit_buttons():
+	var melee_cost = GameState.get_unit_cost(GameState.Owner.PLAYER, RaceData.UnitType.MELEE)
+	var ranged_cost = GameState.get_unit_cost(GameState.Owner.PLAYER, RaceData.UnitType.RANGED)
+	var cavalry_cost = GameState.get_unit_cost(GameState.Owner.PLAYER, RaceData.UnitType.CAVALRY)
+
+	btn_melee.text = "剑士 %dg" % melee_cost
+	btn_ranged.text = "弓手 %dg" % ranged_cost
+	btn_cavalry.text = "骑兵 %dg" % cavalry_cost
+	btn_melee.disabled = not GameState.can_afford(GameState.Owner.PLAYER, melee_cost)
+	btn_ranged.disabled = not GameState.can_afford(GameState.Owner.PLAYER, ranged_cost)
+	btn_cavalry.disabled = not GameState.can_afford(GameState.Owner.PLAYER, cavalry_cost)
+
+
+func _refresh_objective():
+	var target = GameState.get_frontline_target(GameState.Owner.PLAYER)
+	if target:
+		objective_label.text = "下一目标：%s\n收益 %s  |  特性：%s" % [target.node_name, target.get_income_text(), target.get_bonus_text()]
+	else:
+		objective_label.text = "摧毁敌方主城。"
+
+
+func _build_strategy_text() -> String:
+	var owned_nodes = GameState.get_owned_nodes(GameState.Owner.PLAYER).size()
+	var enemy_nodes = GameState.get_owned_nodes(GameState.Owner.ENEMY).size()
+	var bonuses: Array[String] = []
+	if GameState.has_bonus(GameState.Owner.PLAYER, "unit_cost_discount"):
+		bonuses.append("兵营减费")
+	if GameState.has_bonus(GameState.Owner.PLAYER, "skill_haste"):
+		bonuses.append("技能加速")
+	if GameState.has_bonus(GameState.Owner.PLAYER, "bonus_income"):
+		bonuses.append("木场增收")
+	var bonus_text = "暂无战场加成"
+	if not bonuses.is_empty():
+		bonus_text = "已获加成：" + " / ".join(bonuses)
+	return "据点：我方 %d  |  敌方 %d\n%s" % [owned_nodes, enemy_nodes, bonus_text]
 
 
 func _spawn_unit(unit_type: int):
-	var data: RaceData.UnitData = RaceData.base_units[unit_type]
-	if not GameState.can_afford(GameState.Owner.PLAYER, data.cost):
+	var cost = GameState.get_unit_cost(GameState.Owner.PLAYER, unit_type)
+	if not GameState.can_afford(GameState.Owner.PLAYER, cost):
 		return
 
 	var castle = _find_nearest_player_castle()
@@ -239,12 +322,13 @@ func _spawn_unit(unit_type: int):
 	var units_layer = main_node.get_node_or_null("Battlefield/Units")
 	if not units_layer:
 		return
-	GameState.spend_gold(GameState.Owner.PLAYER, data.cost)
+
+	GameState.spend_gold(GameState.Owner.PLAYER, cost)
 	var unit = unit_scene.instantiate()
 	unit.setup(unit_type, GameState.Owner.PLAYER, GameState.player_race)
-	unit.global_position = castle.global_position + Vector2(randf_range(-30, 30), randf_range(40, 80))
-
+	unit.global_position = GameState.get_spawn_road_point(castle.node_id, castle.global_position, randf_range(54.0, 92.0))
 	units_layer.add_child(unit)
+	unit.snap_to_road()
 	GameState.player_units.append(unit)
 	EventBus.unit_spawned.emit(unit)
 
@@ -277,3 +361,7 @@ func _use_skill(index: int):
 	var commander = get_tree().get_first_node_in_group("commander")
 	if commander and commander.has_method("activate_skill"):
 		commander.activate_skill(index)
+
+
+func _on_node_captured(_node_id: String, _new_owner: int, _old_owner: int):
+	_refresh_objective()

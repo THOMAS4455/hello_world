@@ -4,9 +4,9 @@ extends Node2D
 enum SkillState { READY, AIMING, COOLDOWN }
 
 var skills: Array = [
-	{ "name": "Heal", "cooldown": 60.0, "radius": 150.0, "timer": 0.0, "state": SkillState.READY },
-	{ "name": "Fireball", "cooldown": 45.0, "radius": 100.0, "timer": 0.0, "state": SkillState.READY },
-	{ "name": "War Horn", "cooldown": 90.0, "radius": 200.0, "timer": 0.0, "state": SkillState.READY },
+	{ "name": "治疗", "cooldown": 60.0, "radius": 150.0, "timer": 0.0, "state": SkillState.READY },
+	{ "name": "火球", "cooldown": 45.0, "radius": 100.0, "timer": 0.0, "state": SkillState.READY },
+	{ "name": "战吼", "cooldown": 90.0, "radius": 200.0, "timer": 0.0, "state": SkillState.READY },
 ]
 
 var _active_skill_index: int = -1
@@ -121,7 +121,7 @@ func _cast_active_skill():
 
 	var finished_index := _active_skill_index
 	skill["state"] = SkillState.COOLDOWN
-	skill["timer"] = float(skill["cooldown"])
+	skill["timer"] = float(skill["cooldown"]) * GameState.get_skill_cooldown_multiplier(GameState.Owner.PLAYER)
 	_aiming = false
 	_active_skill_index = -1
 	_update_skill_button(finished_index)
@@ -180,10 +180,10 @@ func _update_skill_button(index: int):
 	var btns = [hud.btn_skill1, hud.btn_skill2, hud.btn_skill3]
 	var skill: Dictionary = skills[index]
 	if skill["state"] == SkillState.COOLDOWN:
-		btns[index].text = "%s %ss" % [skill["name"], int(ceil(float(skill["timer"])))]
+		btns[index].text = "%s %ds" % [skill["name"], int(ceil(float(skill["timer"])))]
 		btns[index].disabled = true
 	elif skill["state"] == SkillState.AIMING:
-		btns[index].text = "Cast %s" % skill["name"]
+		btns[index].text = "施放%s" % skill["name"]
 		btns[index].disabled = false
 	else:
 		btns[index].text = "%d. %s" % [index + 1, skill["name"]]

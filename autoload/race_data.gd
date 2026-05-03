@@ -42,41 +42,41 @@ class UnitData:
 
 
 var race_names := {
-	Race.HUMAN: "Human",
-	Race.ORC: "Orc",
-	Race.UNDEAD: "Undead",
-	Race.NIGHT_ELF: "Night Elf",
+	Race.HUMAN: "人族",
+	Race.ORC: "兽族",
+	Race.UNDEAD: "亡灵",
+	Race.NIGHT_ELF: "暗夜精灵",
 }
 
 var race_passives := {
 	Race.HUMAN: {
-		"name": "Fortified Kingdom",
-		"desc": "Infantry gain +3 defense, castles gain 20% HP.",
+		"name": "坚城王国",
+		"desc": "步兵护甲 +3，主城生命值 +20%。",
 		"bonus_defense": 3,
 		"castle_hp_mult": 1.2,
 	},
 	Race.ORC: {
-		"name": "Brutal Charge",
-		"desc": "All units gain +2 attack, cavalry gain 15% HP.",
+		"name": "狂暴冲锋",
+		"desc": "全体单位攻击 +2，骑兵生命值 +15%。",
 		"bonus_attack": 2,
 	},
 	Race.UNDEAD: {
-		"name": "Deathless Legion",
-		"desc": "Theme passive reserved for future revive mechanics.",
+		"name": "不朽军团",
+		"desc": "偏向消耗战的阵营，后续可扩展复活与续战机制。",
 		"revive_chance": 0.2,
 		"revive_hp_pct": 0.5,
 	},
 	Race.NIGHT_ELF: {
-		"name": "Forest Stride",
-		"desc": "All units gain 30% move speed.",
+		"name": "林地疾行",
+		"desc": "全体单位移动速度 +30%。",
 		"bonus_speed_mult": 1.3,
 	},
 }
 
 var base_units := {
-	UnitType.MELEE: UnitData.new("Swordsman", UnitType.MELEE, 50, 100, 10, 5, 150.0, 40.0, 1.0, Color(0.3, 0.3, 0.8)),
-	UnitType.RANGED: UnitData.new("Archer", UnitType.RANGED, 75, 60, 15, 2, 120.0, 200.0, 1.2, Color(0.3, 0.8, 0.3)),
-	UnitType.CAVALRY: UnitData.new("Cavalry", UnitType.CAVALRY, 100, 80, 8, 3, 250.0, 40.0, 0.8, Color(0.8, 0.8, 0.2)),
+	UnitType.MELEE: UnitData.new("剑士", UnitType.MELEE, 55, 130, 12, 6, 145.0, 42.0, 0.9, Color(0.3, 0.3, 0.8), "前排主力，适合推进、防守和拆除据点。"),
+	UnitType.RANGED: UnitData.new("弓手", UnitType.RANGED, 80, 72, 17, 2, 122.0, 220.0, 1.15, Color(0.3, 0.8, 0.3), "后排输出核心，射程远但需要前排保护。"),
+	UnitType.CAVALRY: UnitData.new("骑兵", UnitType.CAVALRY, 105, 96, 11, 4, 240.0, 48.0, 0.72, Color(0.8, 0.8, 0.2), "高机动突击单位，擅长换线、追击和绕后。"),
 }
 
 var race_colors := {
@@ -121,4 +121,15 @@ func get_race_color(race: Race) -> Color:
 
 
 func get_race_name(race: Race) -> String:
-	return race_names.get(race, "Unknown")
+	return race_names.get(race, "未知")
+
+
+func get_siege_multiplier(unit_type: UnitType) -> float:
+	match unit_type:
+		UnitType.MELEE:
+			return 1.25
+		UnitType.RANGED:
+			return 0.85
+		UnitType.CAVALRY:
+			return 0.95
+	return 1.0

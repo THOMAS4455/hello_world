@@ -1,11 +1,9 @@
 extends Node
-## Simple enemy AI. Periodically buys units and sends them to attack.
+## Enemy AI focused on claiming economic nodes and then pushing the player.
 
-var think_interval: float = 3.0
+var think_interval: float = 2.2
 var think_timer: float = 0.0
-
 var unit_scene = preload("res://scenes/unit/unit_base.tscn")
-var _last_spawn_node: GameNode = null
 
 
 func _ready():
@@ -23,25 +21,38 @@ func _process(delta):
 
 
 func think():
-	# Step 1: Buy a unit if we can afford it
-	var unit_type = _pick_unit_type()
-	var data = RaceData.base_units[unit_type]
-	if GameState.can_afford(GameState.Owner.ENEMY, data.cost):
-		_spawn_unit(unit_type, data.cost)
-
-	# Step 2: Command idle units to attack neutral/enemy nodes
-	_command_idle_units()
+	_buy_reinforcements()
+	_assign_orders()
 
 
-func _pick_unit_type() -> int:
-	# Simple heuristic: prefer melee, mix in others
-	var r = randf()
-	if r < 0.5:
+func _buy_reinforcements():
+	var unit_count = GameState.get_unit_count(GameState.Owner.ENEMY)
+	var player_count = GameState.get_unit_count(GameState.Owner.PLAYER)
+	var preferred_type = _pick_unit_type(unit_count, player_count)
+	var cost = GameState.get_unit_cost(GameState.Owner.ENEMY, preferred_type)
+
+	if GameState.can_afford(GameState.Owner.ENEMY, cost):
+		_spawn_unit(preferred_type, cost)
+
+	if GameState.enemy_gold >= GameState.get_unit_cost(GameState.Owner.ENEMY, RaceData.UnitType.MELEE) * 2 and unit_count < player_count:
+		var fallback_cost = GameState.get_unit_cost(GameState.Owner.ENEMY, RaceData.UnitType.MELEE)
+		if GameState.can_afford(GameState.Owner.ENEMY, fallback_cost):
+			_spawn_unit(RaceData.UnitType.MELEE, fallback_cost)
+
+
+func _pick_unit_type(unit_count: int, player_count: int) -> int:
+	if unit_count < 3:
 		return RaceData.UnitType.MELEE
-	elif r < 0.8:
+	if player_count > unit_count + 2:
 		return RaceData.UnitType.RANGED
-	else:
+	if GameState.has_bonus(GameState.Owner.ENEMY, "unit_cost_discount") and randf() < 0.45:
 		return RaceData.UnitType.CAVALRY
+	var roll = randf()
+	if roll < 0.45:
+		return RaceData.UnitType.MELEE
+	if roll < 0.78:
+		return RaceData.UnitType.RANGED
+	return RaceData.UnitType.CAVALRY
 
 
 func _spawn_unit(unit_type: int, cost: int):
@@ -54,82 +65,49 @@ func _spawn_unit(unit_type: int, cost: int):
 		units_layer = get_parent().get_node_or_null("Battlefield/Units") if get_parent() else null
 	if not units_layer:
 		return
+
 	GameState.spend_gold(GameState.Owner.ENEMY, cost)
 	var unit = unit_scene.instantiate()
 	unit.setup(unit_type, GameState.Owner.ENEMY, GameState.enemy_race)
-	unit.global_position = castle.global_position + Vector2(randf_range(-30, 30), randf_range(-80, -40))
+	unit.global_position = GameState.get_spawn_road_point(castle.node_id, castle.global_position, randf_range(54.0, 92.0))
 	units_layer.add_child(unit)
+	unit.snap_to_road()
 	GameState.enemy_units.append(unit)
 
 
 func _find_enemy_spawn_castle() -> GameNode:
-	# Find nearest enemy-owned castle
 	var best: GameNode = null
-	var best_dist: float = INF
-	var enemy_units = _get_enemy_unit_center()
-	for node in GameState.nodes.values():
-		if node.node_owner == GameState.Owner.ENEMY and node.can_spawn_units():
-			var dist = node.global_position.distance_to(enemy_units)
-			if dist < best_dist:
-				best_dist = dist
-				best = node
+	var best_score := -INF
+	for node in GameState.get_owned_nodes(GameState.Owner.ENEMY):
+		if not node.can_spawn_units():
+			continue
+		var score = node.get_priority_score(GameState.Owner.PLAYER)
+		if score > best_score:
+			best_score = score
+			best = node
 	return best
 
 
-func _command_idle_units():
-	var target_node = _pick_target_node()
-	if not target_node:
+func _assign_orders():
+	var focus_target = GameState.get_frontline_target(GameState.Owner.ENEMY)
+	if not focus_target:
 		return
 
+	var assault_ready = GameState.get_unit_count(GameState.Owner.ENEMY) >= max(5, GameState.get_unit_count(GameState.Owner.PLAYER))
 	for unit in GameState.enemy_units:
 		if not is_instance_valid(unit) or unit.is_dead:
 			continue
-		if unit.order == UnitBase.Order.IDLE:
-			# Send toward target node
-			unit.command_move(target_node.global_position)
-			# Or attack it directly
-			if unit.global_position.distance_to(target_node.global_position) < 300:
-				unit.command_attack_node(target_node)
+		if unit.order != UnitBase.Order.IDLE and randf() < 0.65:
+			continue
+		if focus_target.node_owner != GameState.Owner.ENEMY and (assault_ready or unit.unit_type != RaceData.UnitType.RANGED):
+			unit.command_attack_node(focus_target)
+		else:
+			var staging = _get_staging_position(focus_target)
+			unit.command_move(staging)
 
 
-func _pick_target_node() -> GameNode:
-	# Priority: neutral nodes > player nodes
-	var neutrals: Array[GameNode] = []
-	var player_nodes: Array[GameNode] = []
-	for node in GameState.nodes.values():
-		if node.is_dead: continue
-		if node.node_owner == GameState.Owner.NEUTRAL:
-			neutrals.append(node)
-		elif node.node_owner == GameState.Owner.PLAYER:
-			player_nodes.append(node)
-
-	# Prioritize closest neutral node
-	if neutrals.size() > 0:
-		neutrals.sort_custom(func(a, b):
-			var center = _get_enemy_unit_center()
-			return a.global_position.distance_to(center) < b.global_position.distance_to(center)
-		)
-		return neutrals[0]
-
-	# If no neutrals, attack player's weakest node
-	if player_nodes.size() > 0:
-		player_nodes.sort_custom(func(a, b): return a.hp < b.hp)
-		return player_nodes[0]
-
-	return null
-
-
-func _get_enemy_unit_center() -> Vector2:
-	var sum = Vector2.ZERO
-	var count = 0
-	for unit in GameState.enemy_units:
-		if is_instance_valid(unit) and not unit.is_dead:
-			sum += unit.global_position
-			count += 1
-	if count > 0:
-		return sum / count
-	# If no units, return enemy main castle position
-	for node in GameState.nodes.values():
-		if node.node_owner == GameState.Owner.ENEMY and node.node_type == GameNode.NodeType.MAIN_CASTLE:
-			return node.global_position
-	return Vector2(1750, 400)
+func _get_staging_position(target: GameNode) -> Vector2:
+	var origin = GameState.get_stronghold(GameState.Owner.ENEMY)
+	if not origin:
+		return target.global_position
+	return target.global_position.lerp(origin.global_position, 0.2)
