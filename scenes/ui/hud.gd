@@ -33,8 +33,8 @@ func _build_ui():
 	left_margin.anchor_bottom = 0.0
 	left_margin.offset_left = 16
 	left_margin.offset_top = 16
-	left_margin.offset_right = 412
-	left_margin.offset_bottom = 380
+	left_margin.offset_right = 332
+	left_margin.offset_bottom = 300
 	add_child(left_margin)
 
 	var left_stack = VBoxContainer.new()
@@ -49,13 +49,13 @@ func _build_ui():
 
 	gold_label = Label.new()
 	gold_label.text = "Gold: 200"
-	gold_label.add_theme_font_size_override("font_size", 20)
+	gold_label.add_theme_font_size_override("font_size", 18)
 	gold_label.add_theme_color_override("font_color", Color(1, 0.85, 0.3))
 	top_content.add_child(gold_label)
 
 	income_label = Label.new()
 	income_label.text = "Income: 0/tick"
-	income_label.add_theme_font_size_override("font_size", 14)
+	income_label.add_theme_font_size_override("font_size", 13)
 	income_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
 	top_content.add_child(income_label)
 
@@ -77,7 +77,7 @@ func _build_ui():
 
 	btn_skill1 = _btn("1. Heal")
 	btn_skill2 = _btn("2. Fireball")
-	btn_skill3 = _btn("3. War Horn")
+	btn_skill3 = _btn("3. Horn")
 	btn_skill1.pressed.connect(func(): _use_skill(0))
 	btn_skill2.pressed.connect(func(): _use_skill(1))
 	btn_skill3.pressed.connect(func(): _use_skill(2))
@@ -101,7 +101,7 @@ func _build_ui():
 	unit_buttons.add_theme_constant_override("separation", 8)
 	unit_content.add_child(unit_buttons)
 
-	btn_melee = _btn("Swordsman 50g")
+	btn_melee = _btn("Sword 50g")
 	btn_ranged = _btn("Archer 75g")
 	btn_cavalry = _btn("Cavalry 100g")
 	btn_melee.pressed.connect(_buy_melee)
@@ -127,8 +127,8 @@ func _build_ui():
 	hint_wrap.anchor_top = 1.0
 	hint_wrap.anchor_right = 1.0
 	hint_wrap.anchor_bottom = 1.0
-	hint_wrap.offset_left = -440
-	hint_wrap.offset_top = -220
+	hint_wrap.offset_left = -340
+	hint_wrap.offset_top = -184
 	hint_wrap.offset_right = -16
 	hint_wrap.offset_bottom = -16
 	add_child(hint_wrap)
@@ -157,7 +157,7 @@ func _build_ui():
 
 func _make_panel_container() -> PanelContainer:
 	var panel = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(396, 0)
+	panel.custom_minimum_size = Vector2(316, 0)
 	panel.add_theme_stylebox_override("panel", _make_panel())
 	return panel
 
@@ -171,18 +171,18 @@ func _make_panel() -> StyleBoxFlat:
 	stylebox.border_width_bottom = 1
 	stylebox.border_color = Color(0.3, 0.3, 0.45)
 	stylebox.content_margin_left = 12
-	stylebox.content_margin_top = 10
+	stylebox.content_margin_top = 9
 	stylebox.content_margin_right = 12
-	stylebox.content_margin_bottom = 10
+	stylebox.content_margin_bottom = 9
 	return stylebox
 
 
 func _btn(text_value: String) -> Button:
 	var button = Button.new()
 	button.text = text_value
-	button.custom_minimum_size = Vector2(0, 34)
+	button.custom_minimum_size = Vector2(0, 30)
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	button.add_theme_font_size_override("font_size", 12)
+	button.add_theme_font_size_override("font_size", 11)
 	return button
 
 
