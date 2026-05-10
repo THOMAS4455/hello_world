@@ -1,0 +1,17 @@
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+}
+
+a {
+  text-decoration: none;
+}
+
+code {
+  font-family: 'Cascadia Mono', Consolas, 'Courier New', monospace;
+}

@@ -1,0 +1,126 @@
+.dashboard-page {
+  max-width: 1280px;
+}
+
+.dashboard-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 20px 22px;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(14, 120, 204, 0.18), transparent 28%),
+    radial-gradient(circle at 88% 80%, rgba(17, 162, 131, 0.16), transparent 34%),
+    linear-gradient(120deg, #f4f9ff 0%, #ecfff9 100%);
+  border: 1px solid #d3e4f4;
+}
+
+.hero-tag {
+  display: inline-block;
+  border: 1px solid #c5dbf8;
+  background: rgba(255, 255, 255, 0.8);
+  color: #305477;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.dashboard-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.metric-card {
+  border: 1px solid #dce9fb;
+  border-radius: 14px;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(13, 67, 122, 0.12);
+}
+
+.metric-label {
+  font-size: 13px;
+  color: #6f7f92;
+  margin-bottom: 8px;
+}
+
+.metric-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: #1f3651;
+  line-height: 1;
+}
+
+.dashboard-control-card {
+  border-style: dashed;
+}
+
+.trend-filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dashboard-table-card .card-header {
+  background: #f8fbff;
+  border-bottom: 1px solid #e2edf9;
+  color: #1f3651;
+}
+
+.dashboard-table-card table thead th {
+  background: #f8fbff;
+  color: #47607a;
+  font-weight: 600;
+  border-bottom-width: 1px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.dashboard-table-card table tbody tr:hover {
+  background: #f3f8ff;
+}
+
+.table-action-group {
+  display: flex;
+  gap: 6px;
+}
+
+.empty-state {
+  text-align: center;
+  color: #738399;
+  padding: 36px 12px;
+}
+
+@media (max-width: 768px) {
+  .dashboard-hero {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 14px;
+  }
+
+  .dashboard-hero-actions {
+    width: 100%;
+  }
+
+  .dashboard-hero-actions .btn {
+    flex: 1;
+    min-width: 120px;
+  }
+
+  .metric-value {
+    font-size: 22px;
+  }
+
+  .table-action-group {
+    flex-direction: column;
+  }
+}
+

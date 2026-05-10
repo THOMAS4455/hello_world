@@ -1,0 +1,131 @@
+.home-page {
+  max-width: 1320px;
+}
+
+.home-hero {
+  position: relative;
+  padding: 28px;
+  border-radius: 20px;
+  display: grid;
+  grid-template-columns: 1.3fr 0.7fr;
+  gap: 18px;
+  background:
+    radial-gradient(circle at 8% 24%, rgba(255, 175, 84, 0.34), transparent 34%),
+    radial-gradient(circle at 88% 16%, rgba(31, 209, 184, 0.24), transparent 30%),
+    linear-gradient(135deg, #0c2847 0%, #0f4f79 48%, #0b6f66 100%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 16px 36px rgba(4, 35, 67, 0.28);
+  color: #f5fbff;
+}
+
+.home-hero-main h1 {
+  margin: 12px 0 10px;
+  font-size: clamp(1.6rem, 2.8vw, 2.4rem);
+  font-weight: 800;
+}
+
+.home-hero-main p {
+  color: rgba(234, 245, 255, 0.94);
+  line-height: 1.72;
+  max-width: 780px;
+}
+
+.home-hero-actions {
+  margin-top: 16px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.home-hero-side {
+  display: grid;
+  gap: 10px;
+}
+
+.hero-stat {
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(5px);
+}
+
+.hero-stat span {
+  display: block;
+  font-size: 12px;
+  color: rgba(237, 247, 255, 0.84);
+}
+
+.hero-stat strong {
+  font-size: 20px;
+}
+
+.module-card {
+  border: 1px solid #d9e7f7;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f5fbff 100%);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.module-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 24px rgba(15, 58, 105, 0.15);
+}
+
+.module-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #173553;
+  margin-bottom: 6px;
+}
+
+.module-desc {
+  color: #5f768f;
+}
+
+.home-news-list {
+  display: grid;
+  gap: 10px;
+}
+
+.home-news-item {
+  border: 1px solid #d9e9fb;
+  border-radius: 12px;
+  padding: 11px 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
+}
+
+.home-news-item:hover {
+  border-color: #a6cbee;
+}
+
+.home-news-title {
+  font-weight: 600;
+  color: #203b55;
+  margin-bottom: 6px;
+  line-height: 1.5;
+}
+
+.home-news-title a {
+  color: #135ea9;
+  text-decoration: none;
+}
+
+.home-news-title a:hover {
+  text-decoration: underline;
+}
+
+.home-news-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #5f768d;
+  font-size: 12px;
+}
+
+@media (max-width: 992px) {
+  .home-hero {
+    grid-template-columns: 1fr;
+    padding: 20px;
+  }
+}

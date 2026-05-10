@@ -1,0 +1,60 @@
+.page-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.page-logo-compact {
+  gap: 0.55rem;
+}
+
+.page-logo-mark {
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 1.06rem;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.14);
+}
+
+.page-logo-compact .page-logo-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 0.96rem;
+}
+
+.logo-tone-orange {
+  background: linear-gradient(135deg, #ff8a3d, #ffbe58);
+}
+
+.logo-tone-teal {
+  background: linear-gradient(135deg, #0fbf9f, #52d2cb);
+}
+
+.logo-tone-blue {
+  background: linear-gradient(135deg, #2f6df6, #56a6ff);
+}
+
+.logo-tone-rose {
+  background: linear-gradient(135deg, #ff5f7e, #ff9f5d);
+}
+
+.page-logo-title {
+  font-size: 1.02rem;
+  font-weight: 750;
+  color: #123252;
+  line-height: 1.1;
+}
+
+.page-logo-subtitle {
+  margin-top: 2px;
+  font-size: 0.76rem;
+  color: #617790;
+  letter-spacing: 0.2px;
+}

@@ -1,0 +1,116 @@
+.service-fab-wrap {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 1040;
+}
+
+.service-fab {
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 14px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 10px 26px rgba(13, 49, 90, 0.25);
+  transition: transform 0.16s ease, box-shadow 0.2s ease;
+}
+
+.service-fab:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 30px rgba(13, 49, 90, 0.3);
+}
+
+.service-fab.ok {
+  background: linear-gradient(135deg, #149c65 0%, #0f8f8f 100%);
+}
+
+.service-fab.warn {
+  background: linear-gradient(135deg, #c43d3d 0%, #ae2b64 100%);
+}
+
+.service-fab-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.service-fab-panel {
+  margin-top: 10px;
+  width: 320px;
+  border: 1px solid #d9e8fb;
+  border-radius: 14px;
+  box-shadow: 0 12px 30px rgba(13, 55, 101, 0.2);
+  animation: status-panel-in 0.2s ease;
+}
+
+.service-fab-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.service-fab-title {
+  font-weight: 700;
+  color: #1d3550;
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid #e3eefc;
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: #fbfdff;
+  transition: transform 0.14s ease, border-color 0.14s ease;
+}
+
+.status-row:hover {
+  transform: translateY(-1px);
+  border-color: #c8def7;
+}
+
+.status-label {
+  font-weight: 700;
+  color: #23405e;
+}
+
+.status-detail {
+  color: #70859d;
+  font-size: 12px;
+}
+
+.service-fab-time {
+  color: #72869b;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+@keyframes status-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 768px) {
+  .service-fab-wrap {
+    right: 10px;
+    bottom: 10px;
+  }
+
+  .service-fab-panel {
+    width: min(90vw, 320px);
+  }
+}

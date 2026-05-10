@@ -1,0 +1,59 @@
+.decision-card {
+  border: 1px solid #d7e7f8;
+  border-radius: 16px;
+  box-shadow: 0 12px 28px rgba(14, 57, 104, 0.12);
+}
+
+.decision-card .card-header {
+  background:
+    radial-gradient(circle at 10% 30%, rgba(255, 183, 86, 0.18), transparent 35%),
+    linear-gradient(120deg, #f7fbff 0%, #eef8ff 48%, #eefcf7 100%);
+  color: #1f3a56;
+  font-weight: 700;
+}
+
+.decision-summary {
+  color: #1e3a55;
+  line-height: 1.72;
+}
+
+.decision-confidence .progress {
+  height: 9px;
+  border-radius: 999px;
+  background: #eaf1fb;
+}
+
+.decision-evidence {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.decision-evidence-item {
+  border: 1px solid #e3edf9;
+  border-radius: 10px;
+  padding: 9px 10px;
+  background: #f8fbff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #4c647e;
+}
+
+.decision-evidence-item strong {
+  color: #17324c;
+}
+
+.decision-risk {
+  border: 1px solid #f2d8bc;
+  background: #fff8f0;
+  color: #7c4c1e;
+  border-radius: 10px;
+  padding: 9px 10px;
+}
+
+@media (max-width: 768px) {
+  .decision-evidence {
+    grid-template-columns: 1fr;
+  }
+}

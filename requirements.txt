@@ -1,0 +1,50 @@
+# 股票预测系统 - Python依赖包
+# 适用于Python 3.9+
+
+# 核心Web框架
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# 数据获取和处理
+akshare>=1.18.40
+requests==2.31.0
+httpx==0.25.2
+pandas==2.2.3
+numpy==1.26.4
+
+# 数据库和ORM
+sqlalchemy==2.0.23
+alembic==1.13.1
+psycopg2-binary==2.9.9
+
+# 缓存和消息队列
+redis==5.0.1
+celery==5.3.4
+
+# AI和机器学习
+tensorflow==2.20.0
+scikit-learn==1.6.1
+openai>=1.0.0
+
+# 工具库
+python-dotenv==1.0.0
+click==8.1.7
+rich==13.7.0
+structlog==23.2.0
+
+# 监控和日志
+prometheus-client==0.19.0
+
+# 测试和开发
+pytest==7.4.3
+pytest-asyncio==0.21.1
+black==23.11.0
+flake8==6.1.0
+
+# 中文处理 (可选)
+jieba==0.42.1
+
+# 网络请求优化
+urllib3==2.1.0

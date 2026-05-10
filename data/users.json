@@ -1,0 +1,107 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "username": "user_1774860187",
+      "email": "user_1774860187@example.com",
+      "password_salt": "81ce3caa17ffda405beab977e61a2838",
+      "password_hash": "d21eb6883bddb687185762a49ab2624c72ad51b5777428a3d1e33839a925b915",
+      "created_at": "2026-03-30T16:43:07.980548",
+      "profile": {
+        "phone": "",
+        "company": "",
+        "bio": ""
+      },
+      "settings": {
+        "theme": "dark",
+        "language": "zh-CN",
+        "notifications": false
+      }
+    },
+    {
+      "id": 2,
+      "username": "user_1774861108",
+      "email": "user_1774861108@x.com",
+      "password_salt": "b2bab7d67f87290adf38ef4b6a1c4722",
+      "password_hash": "c72111bbcc9bffaccf759243dc96f75d18953c29d053988b6d2c9995bbdebcbf",
+      "created_at": "2026-03-30T16:58:28.435059",
+      "roles": [
+        "user"
+      ],
+      "profile": {
+        "phone": "",
+        "company": "",
+        "bio": ""
+      },
+      "settings": {
+        "theme": "light",
+        "language": "zh-CN",
+        "notifications": true
+      }
+    },
+    {
+      "id": 3,
+      "username": "tempadmin",
+      "email": "tempadmin@x.com",
+      "password_salt": "8c4eedd1dbda74d18feb35f6255fe91e",
+      "password_hash": "75dc6dbeaf7ccf75de041f06750ff93a7402e6829f728f977ce7b155796e7bcc",
+      "created_at": "2026-03-30T16:58:28.618821",
+      "roles": [
+        "admin"
+      ],
+      "profile": {
+        "phone": "",
+        "company": "",
+        "bio": ""
+      },
+      "settings": {
+        "theme": "light",
+        "language": "zh-CN",
+        "notifications": true
+      }
+    },
+    {
+      "id": 4,
+      "username": "admin",
+      "email": "admin@qq.com",
+      "password_salt": "bd9b2e25e6e50a5601229a4a64f43f85",
+      "password_hash": "6f5e363c9821e0f636aba7fc12171f148655a1b85e4017282d88f9b72d147a9b",
+      "created_at": "2026-03-30T19:53:08.901860",
+      "roles": [
+        "admin"
+      ],
+      "profile": {
+        "phone": "",
+        "company": "",
+        "bio": ""
+      },
+      "settings": {
+        "theme": "light",
+        "language": "zh-CN",
+        "notifications": true
+      }
+    },
+    {
+      "id": 5,
+      "username": "thomas",
+      "email": "12@qq.com",
+      "password_salt": "b56276d639913a2c6254bb6b7c109d97",
+      "password_hash": "2abfce4e87d8298493a8026241da5556c69376d0c9904397e289947893138f1d",
+      "created_at": "2026-03-30T20:27:55.983189",
+      "roles": [
+        "user"
+      ],
+      "profile": {
+        "phone": "",
+        "company": "",
+        "bio": ""
+      },
+      "settings": {
+        "theme": "light",
+        "language": "zh-CN",
+        "notifications": true
+      }
+    }
+  ],
+  "next_id": 6
+}
