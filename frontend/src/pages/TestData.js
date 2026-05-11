@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Spinner, Alert, Button } from 'react-bootstrap';
+import { Alert, Button, Card, Spinner } from 'react-bootstrap';
 import { useAppI18n } from '../i18n';
 import { useGetStocksQuery } from '../services/apiService';
 
@@ -32,7 +32,7 @@ const TestData = () => {
     return (
       <div className="p-4">
         <Alert variant="danger">
-          <h5>{isEnglish ? 'API Error' : 'API错误'}</h5>
+          <h5>{isEnglish ? 'API Error' : 'API 错误'}</h5>
           <pre>{JSON.stringify(error, null, 2)}</pre>
           <Button onClick={() => refetch()}>{isEnglish ? 'Retry' : '重试'}</Button>
         </Alert>
@@ -44,21 +44,25 @@ const TestData = () => {
     <div className="p-4">
       <Card>
         <Card.Header>
-          <h4>{isEnglish ? 'Data Test Page' : '数据测试页面'}</h4>
-          <Button onClick={() => refetch()} className="float-end">{isEnglish ? 'Refresh' : '刷新'}</Button>
+          <h4>{isEnglish ? 'Data Test Page' : '数据测试页'}</h4>
+          <Button onClick={() => refetch()} className="float-end">
+            {isEnglish ? 'Refresh' : '刷新'}
+          </Button>
         </Card.Header>
         <Card.Body>
           <div className="mb-3">
-            <h5>{isEnglish ? 'Debug Info:' : '调试信息:'}</h5>
+            <h5>{isEnglish ? 'Debug Info:' : '调试信息：'}</h5>
             <pre style={{ fontSize: '12px', maxHeight: '200px', overflow: 'auto' }}>
               {JSON.stringify(debugInfo, null, 2)}
             </pre>
           </div>
 
           <div className="mb-3">
-            <h5>{isEnglish ? `Stock Data (${debugInfo.total})` : `股票数据 (${debugInfo.total} 只):`}</h5>
+            <h5>{isEnglish ? `Stock Data (${debugInfo.total})` : `股票数据（${debugInfo.total}）`}</h5>
             {debugInfo.stocks.length === 0 ? (
-              <Alert variant="warning">{isEnglish ? 'No stock data available.' : '没有股票数据'}</Alert>
+              <Alert variant="warning">
+                {isEnglish ? 'No stock data available.' : '当前没有股票数据。'}
+              </Alert>
             ) : (
               <div>
                 {debugInfo.stocks.map((stock, index) => (
@@ -67,7 +71,8 @@ const TestData = () => {
                     <br />
                     {isEnglish ? 'Price' : '价格'}: {stock.price}
                     <br />
-                    {isEnglish ? 'Change' : '涨跌'}: {stock.change} ({stock.change_percent.toFixed(2)}%)
+                    {isEnglish ? 'Change' : '涨跌'}: {stock.change} (
+                    {Number(stock.change_percent || 0).toFixed(2)}%)
                     <br />
                     {isEnglish ? 'Volume' : '成交量'}: {stock.volume}
                   </div>

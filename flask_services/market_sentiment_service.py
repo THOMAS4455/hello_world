@@ -1,6 +1,6 @@
 """
-Market sentiment service based on real market data + online finance news.
-No mock/fallback data is used.
+Market sentiment service based on real market data and online finance news.
+No mock data is used.
 """
 
 from __future__ import annotations
@@ -45,6 +45,50 @@ class MarketSentimentService:
             "波动",
             "担忧",
         }
+        self.finance_keywords = {
+            "a股",
+            "港股",
+            "美股",
+            "股",
+            "股票",
+            "股市",
+            "市场",
+            "指数",
+            "基金",
+            "债",
+            "债券",
+            "期货",
+            "黄金",
+            "原油",
+            "汇率",
+            "人民币",
+            "美元",
+            "利率",
+            "降息",
+            "加息",
+            "通胀",
+            "经济",
+            "金融",
+            "银行",
+            "证券",
+            "保险",
+            "公司",
+            "业绩",
+            "财报",
+            "营收",
+            "利润",
+            "并购",
+            "融资",
+            "ipo",
+            "芯片",
+            "新能源",
+            "地产",
+            "消费",
+            "制造",
+            "科技",
+            "央行",
+            "政策",
+        }
 
     @staticmethod
     def _clamp(value: float, min_value: float = -1.0, max_value: float = 1.0) -> float:
@@ -62,13 +106,46 @@ class MarketSentimentService:
             return "偏谨慎"
         return "中性"
 
+    @staticmethod
+    def _first_present(row: Dict[str, Any], *keys: str, default: Any = "") -> Any:
+        for key in keys:
+            if key in row and row.get(key) not in (None, ""):
+                return row.get(key)
+        return default
+
+    def _is_finance_relevant(self, title: str) -> bool:
+        text = str(title or "").strip().lower()
+        if not text:
+            return False
+        return any(keyword in text for keyword in self.finance_keywords)
+
+    def _normalize_news_item(
+        self,
+        *,
+        title: str,
+        url: str = "",
+        source: str = "",
+        time_text: Any = "",
+    ) -> Optional[Dict[str, Any]]:
+        title = str(title or "").strip()
+        if not title:
+            return None
+        url = str(url or "").strip()
+        source = str(source or "unknown").strip().lower() or "unknown"
+        if url and not url.startswith(("http://", "https://")):
+            url = ""
+        return {
+            "title": title,
+            "url": url,
+            "source": source,
+            "time": str(time_text or "").strip(),
+            "is_clickable": bool(url),
+        }
+
     def _extract_stocks(self) -> List[Dict[str, Any]]:
         payload = self.data_service.get_stocks(limit=0)
-        if isinstance(payload, dict):
-            stocks = payload.get("data", {}).get("stocks", [])
-        else:
-            stocks = payload
-        if not isinstance(stocks, list) or len(stocks) == 0:
+        stocks = payload.get("data", {}).get("stocks", []) if isinstance(payload, dict) else payload
+        if not isinstance(stocks, list) or not stocks:
             raise Exception("No real-time stock universe data available")
         return stocks
 
@@ -120,10 +197,6 @@ class MarketSentimentService:
             "strong_down_ratio": round(strong_down / total, 4),
         }
 
-    def _fetch_sina_finance_news(self, limit: int = 20) -> List[Dict[str, Any]]:
-        # Sina roll feed: real-time finance headlines.
-        return self._fetch_sina_finance_news_paged(limit=limit, keyword=None)
-
     def _fetch_sina_finance_news_paged(
         self, limit: int = 20, keyword: Optional[str] = None, max_pages: Optional[int] = None
     ) -> List[Dict[str, Any]]:
@@ -137,8 +210,7 @@ class MarketSentimentService:
 
         hard_limit = max(20, min(int(limit or 20), 400))
         page_size = 50
-        pages = max_pages or max(1, math.ceil(hard_limit / page_size))
-        pages = min(pages, 10)
+        pages = min(max_pages or max(1, math.ceil(hard_limit / page_size)), 10)
 
         news: List[Dict[str, Any]] = []
         seen = set()
@@ -166,23 +238,22 @@ class MarketSentimentService:
                     last_err = str(exc)
             if last_err is not None:
                 raise Exception(last_err)
+
             items = payload.get("result", {}).get("data", [])
             for item in items:
-                title = str(item.get("title", "")).strip()
-                if not title:
+                news_item = self._normalize_news_item(
+                    title=item.get("title", ""),
+                    url=item.get("url", ""),
+                    source="sina",
+                    time_text=item.get("ctime"),
+                )
+                if not news_item:
                     continue
-                key = title.lower()
+                key = news_item["title"].lower()
                 if key in seen:
                     continue
                 seen.add(key)
-                news.append(
-                    {
-                        "title": title,
-                        "url": str(item.get("url", "")).strip(),
-                        "source": "sina",
-                        "time": item.get("ctime"),
-                    }
-                )
+                news.append(news_item)
             if len(news) >= hard_limit:
                 break
         return news
@@ -193,19 +264,26 @@ class MarketSentimentService:
         df = ak.stock_info_global_em()
         if df is None or df.empty:
             raise Exception("AKShare global news is empty")
+
         news: List[Dict[str, Any]] = []
-        for _, row in df.head(max(5, min(limit, 50))).iterrows():
-            title = str(row.get("标题", "")).strip()
-            if not title:
+        for _, row in df.head(max(10, min(limit * 3, 120))).iterrows():
+            row_dict = row.to_dict()
+            title = self._first_present(row_dict, "标题", "鏍囬")
+            if not self._is_finance_relevant(str(title)):
                 continue
-            news.append(
-                {
-                    "title": title,
-                    "url": "",
-                    "source": str(row.get("来源", "eastmoney")).strip() or "eastmoney",
-                    "time": str(row.get("发布时间", "")).strip(),
-                }
+            source = self._first_present(row_dict, "来源", "鏉ユ簮", default="eastmoney")
+            time_text = self._first_present(row_dict, "发布时间", "发布时间", "鍙戝竷鏃堕棿")
+            url = self._first_present(row_dict, "链接", "资讯链接", "url", "URL")
+            news_item = self._normalize_news_item(
+                title=title,
+                url=url,
+                source=source,
+                time_text=time_text,
             )
+            if news_item:
+                news.append(news_item)
+            if len(news) >= limit:
+                break
         return news
 
     def _fetch_finance_news(
@@ -216,10 +294,11 @@ class MarketSentimentService:
         errors: List[str] = []
         merged: List[Dict[str, Any]] = []
         seen = set()
-        source_set = set((sources or ["sina", "akshare"]))
+        source_set = set(sources or ["sina", "akshare"])
+
         fetchers: List[tuple[str, Any]] = []
         if "sina" in source_set:
-            fetchers.append(("sina", lambda lim: self._fetch_sina_finance_news_paged(limit=lim, keyword=None)))
+            fetchers.append(("sina", lambda limit: self._fetch_sina_finance_news_paged(limit=limit, keyword=None)))
         if "akshare" in source_set:
             fetchers.append(("akshare", self._fetch_akshare_finance_news))
         if not fetchers:
@@ -240,8 +319,6 @@ class MarketSentimentService:
                         continue
                     seen.add(key)
                     merged.append(item)
-                if len(merged) >= limit:
-                    break
             except Exception as exc:
                 err_text = str(exc).strip() or "unknown error"
                 errors.append(f"{source_name}: {err_text}")
@@ -250,6 +327,7 @@ class MarketSentimentService:
             detail = " | ".join(errors) if errors else "all configured sources returned no usable news"
             raise Exception("Failed to fetch online finance news: " + detail)
 
+        merged.sort(key=lambda item: (0 if item.get("is_clickable") else 1, item.get("time", "")))
         return merged[:limit]
 
     def _compute_news_sentiment(self, news_items: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -340,17 +418,14 @@ class MarketSentimentService:
         keyword: Optional[str],
         sources: List[str],
     ) -> str:
-        headlines = []
-        for item in news_items[:24]:
-            source = item.get("source") or "unknown"
-            title = item.get("title") or ""
-            headlines.append(f"- [{source}] {title}")
-        headlines_text = "\n".join(headlines)
+        headlines_text = "\n".join(
+            f"- [{item.get('source') or 'unknown'}] {item.get('title') or ''}" for item in news_items[:24]
+        )
 
         stock_text = ""
         if stock_context:
             stock_text = (
-                f"\n个股上下文:\n"
+                "\n个股上下文\n"
                 f"- 股票: {stock_context['symbol']} {stock_context.get('name', '')}\n"
                 f"- 最新价: {stock_context['price']}\n"
                 f"- 当日涨跌幅: {stock_context['change_percent']}%\n"
@@ -359,20 +434,20 @@ class MarketSentimentService:
             )
 
         return (
-            "请基于以下真实数据给出市场情绪分析。要求: 用中文自然段输出，不要使用标题符号、井号、列表编号。"
-            "先给结论，再给依据，再给交易层面的短中长线建议，最后给风险提示。\n"
+            "请基于以下真实数据给出市场情绪分析。要求：使用中文自然段输出，不要使用编号列表。"
+            "先给结论，再给依据，再给短中线建议，最后给风险提示。\n"
             f"综合情绪分数: {round(final_score, 4)}\n"
             f"综合情绪标签: {label}\n"
             f"抓取新闻来源: {','.join(sources)}\n"
             f"定向关键词: {keyword or '无'}\n"
             f"市场广度: 上涨{market_metrics['rising_count']} / 下跌{market_metrics['falling_count']} / 平盘{market_metrics['flat_count']}\n"
-            f"市场上涨占比: {market_metrics['rising_ratio']}\n"
-            f"市场平均涨跌幅: {market_metrics['avg_change_percent']}%\n"
-            f"市场波动率(横截面): {market_metrics['volatility_percent']}%\n"
+            f"上涨占比: {market_metrics['rising_ratio']}\n"
+            f"平均涨跌幅: {market_metrics['avg_change_percent']}%\n"
+            f"横截面波动率: {market_metrics['volatility_percent']}%\n"
             f"新闻情绪分数: {news_metrics['score']}\n"
             f"新闻统计: 正面{news_metrics['positive_count']} 负面{news_metrics['negative_count']} 中性{news_metrics['neutral_count']} 总计{news_metrics['total_news']}\n"
             f"{stock_text}\n"
-            "最近财经新闻标题:\n"
+            "最近财经新闻标题\n"
             f"{headlines_text}"
         )
 
@@ -386,10 +461,7 @@ class MarketSentimentService:
         stocks = self._extract_stocks()
         market_metrics = self._compute_market_metrics(stocks)
 
-        stock_context = None
-        if symbol:
-            stock_context = self._compute_stock_context(symbol)
-
+        stock_context = self._compute_stock_context(symbol) if symbol else None
         source_list = [s.strip().lower() for s in (sources or ["sina", "akshare"]) if str(s).strip()]
         if not source_list:
             source_list = ["sina", "akshare"]
@@ -407,14 +479,15 @@ class MarketSentimentService:
             news_items = targeted if targeted else all_news_items
         else:
             news_items = all_news_items
-        news_metrics = self._compute_news_sentiment(news_items)
 
+        news_metrics = self._compute_news_sentiment(news_items)
         market_score = float(market_metrics["score"])
         news_score = float(news_metrics["score"])
-        if stock_context is None:
-            final_score = self._clamp(0.7 * market_score + 0.3 * news_score)
-        else:
-            final_score = self._clamp(0.5 * market_score + 0.25 * news_score + 0.25 * float(stock_context["trend_score"]))
+        final_score = (
+            self._clamp(0.5 * market_score + 0.25 * news_score + 0.25 * float(stock_context["trend_score"]))
+            if stock_context
+            else self._clamp(0.7 * market_score + 0.3 * news_score)
+        )
 
         label = self._score_to_label(final_score)
         confidence = self._clamp(
@@ -429,8 +502,8 @@ class MarketSentimentService:
         factors = [
             {
                 "name": "市场广度",
-                "value": round((market_metrics["rising_ratio"] - market_metrics["falling_ratio"]), 4),
-                "description": f"上涨占比 {market_metrics['rising_ratio']}, 下跌占比 {market_metrics['falling_ratio']}",
+                "value": round(market_metrics["rising_ratio"] - market_metrics["falling_ratio"], 4),
+                "description": f"上涨占比 {market_metrics['rising_ratio']}，下跌占比 {market_metrics['falling_ratio']}",
             },
             {
                 "name": "平均涨跌幅",
@@ -440,10 +513,10 @@ class MarketSentimentService:
             {
                 "name": "新闻情绪",
                 "value": news_metrics["score"],
-                "description": f"基于 {news_metrics['total_news']} 条实时财经新闻标题计算",
+                "description": f"基于 {news_metrics['total_news']} 条实时财经新闻标题统计",
             },
         ]
-        if stock_context is not None:
+        if stock_context:
             factors.append(
                 {
                     "name": "个股趋势",

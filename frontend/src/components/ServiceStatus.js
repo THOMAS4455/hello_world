@@ -3,6 +3,8 @@ import { Badge, Button, Card, Spinner } from 'react-bootstrap';
 import { useAppI18n } from '../i18n';
 import '../styles/ServiceStatus.css';
 
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
+
 const StatusRow = ({ label, status, detail, t }) => {
   const badge = useMemo(() => {
     if (status === 'online') return { bg: 'success', text: t('serviceOnline') };
@@ -34,7 +36,7 @@ const ServiceStatus = () => {
   const checkServices = async () => {
     setChecking(true);
     try {
-      const healthResp = await fetch('http://localhost:8000/health');
+      const healthResp = await fetch(`${API_BASE_URL}/health`);
       if (healthResp.ok) {
         const health = await healthResp.json();
         setDataInfo(health);
@@ -47,7 +49,7 @@ const ServiceStatus = () => {
     }
 
     try {
-      const systemResp = await fetch('http://localhost:8000/api/system/health');
+      const systemResp = await fetch(`${API_BASE_URL}/api/system/health`);
       if (systemResp.ok) {
         const system = await systemResp.json();
         const ai = system?.data?.components?.ai_service || null;

@@ -3,30 +3,37 @@
 }
 
 :root {
-  --bg-main-a: #fff5e8;
-  --bg-main-b: #f2fbff;
-  --bg-main-c: #ecfff4;
-  --text-main: #17324a;
-  --text-soft: #5e7285;
-  --card-border: #d8e7f3;
-  --card-bg: rgba(255, 255, 255, 0.9);
-  --primary: #ff8a3d;
-  --primary-hover: #ea762a;
-  --accent: #00a48a;
-  --accent-soft: #e6fbf6;
+  --bg-main: #0b1220;
+  --bg-panel: #111b2e;
+  --bg-panel-soft: #16253d;
+  --bg-surface: #f4f7fb;
+  --text-main: #dfe8f3;
+  --text-soft: #8ea2ba;
+  --text-dark: #162235;
+  --card-border: #d9e3ef;
+  --card-bg: #ffffff;
+  --primary: #f59e0b;
+  --primary-hover: #d88807;
+  --accent: #14b8a6;
+  --accent-soft: #dff8f4;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
 }
 
 body {
   margin: 0;
-  font-family: 'Plus Jakarta Sans', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-family: 'Inter', 'Plus Jakarta Sans', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background:
-    radial-gradient(circle at 8% 10%, rgba(255, 155, 74, 0.2), transparent 31%),
-    radial-gradient(circle at 90% 84%, rgba(0, 164, 138, 0.15), transparent 33%),
-    linear-gradient(130deg, var(--bg-main-a) 0%, var(--bg-main-b) 44%, var(--bg-main-c) 100%);
-  color: var(--text-main);
-  background-attachment: fixed;
+    radial-gradient(circle at top left, rgba(20, 184, 166, 0.08), transparent 24%),
+    radial-gradient(circle at top right, rgba(245, 158, 11, 0.08), transparent 20%),
+    linear-gradient(180deg, #0b1220 0, #0f1728 220px, #eef3f8 220px, #f4f7fb 100%);
+  color: var(--text-dark);
 }
 
 .App {
@@ -37,9 +44,9 @@ body {
 
 .main-content {
   flex: 1;
-  margin-top: 58px;
-  padding: 14px;
-  animation: page-fade-in 0.45s ease;
+  margin-top: 72px;
+  padding: 24px;
+  animation: page-fade-in 0.35s ease;
 }
 
 .main-content.auth-route {
@@ -48,53 +55,51 @@ body {
 }
 
 .navbar {
-  border-bottom: 1px solid #d7e7f7;
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(12px);
 }
 
 .card {
   border: 1px solid var(--card-border);
   background: var(--card-bg);
-  backdrop-filter: blur(6px);
-  border-radius: 14px;
-  box-shadow: 0 6px 20px rgba(8, 54, 102, 0.06);
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .card:hover {
-  box-shadow: 0 8px 24px rgba(8, 54, 102, 0.1);
-  transform: translateY(-1px);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
 }
 
 .btn {
-  border-radius: 10px;
+  border-radius: 8px;
   font-weight: 600;
-  transition: transform 0.16s ease, box-shadow 0.18s ease, background-color 0.2s ease;
+  transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
 .btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 18px rgba(15, 61, 110, 0.14);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
 }
 
 .btn-primary {
-  background: linear-gradient(120deg, var(--primary), #ffb147);
-  border-color: #ff9b59;
+  background: var(--primary);
+  border-color: var(--primary);
 }
 
 .btn-primary:hover {
-  background: linear-gradient(120deg, var(--primary-hover), #ff9a36);
+  background: var(--primary-hover);
   border-color: var(--primary-hover);
 }
 
 .btn-outline-primary {
-  border-color: #ef8a44;
-  color: #d66f2a;
+  border-color: #27466f;
+  color: #d8e3f2;
+  background: transparent;
 }
 
 .btn-outline-primary:hover {
-  background: linear-gradient(120deg, var(--primary), #ffb147);
-  border-color: #ff9b59;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: #5376a3;
+  color: #ffffff;
 }
 
 .table {
@@ -104,20 +109,38 @@ body {
 .table th {
   white-space: nowrap;
   font-size: 12px;
-  letter-spacing: 0.25px;
+  letter-spacing: 0;
   text-transform: uppercase;
-  color: #5d748b;
+  color: #60738a;
 }
 
 .analysis-page {
-  max-width: 1280px;
+  max-width: 1360px;
   margin: 0 auto;
+}
+
+.form-control,
+.form-select {
+  border-radius: 8px;
+  border-color: #d5e0ea;
+  min-height: 44px;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: #7ea0c8;
+  box-shadow: 0 0 0 0.2rem rgba(65, 118, 190, 0.14);
+}
+
+.badge {
+  border-radius: 999px;
+  font-weight: 600;
 }
 
 @keyframes page-fade-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
@@ -127,8 +150,8 @@ body {
 
 @media (max-width: 768px) {
   .main-content {
-    margin-top: 54px;
-    padding: 10px;
+    margin-top: 66px;
+    padding: 14px;
   }
 
   .main-content.auth-route {
