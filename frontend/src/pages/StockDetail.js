@@ -4,6 +4,7 @@ import { Alert, Badge, Button, Card, Col, Container, Row, Spinner, Table } from 
 import Plot from 'react-plotly.js';
 import { useAppI18n } from '../i18n';
 import PageLogo from '../components/PageLogo';
+import stockApiService from '../services/stockApi';
 
 const parseIndicators = (indicators) => {
   if (!indicators || typeof indicators !== 'object') return [];
@@ -35,14 +36,7 @@ const StockDetail = () => {
     try {
       setLoading(true);
       setError('');
-      const response = await fetch(`http://localhost:8000/api/stocks/${symbol}`);
-      const payload = await response.json();
-
-      if (!payload?.success || !payload?.data) {
-        throw new Error(payload?.message || (isEnglish ? 'Failed to fetch stock details.' : '获取股票详情失败'));
-      }
-
-      const detail = payload.data;
+      const detail = await stockApiService.getStockDetail(symbol);
       setStockData(detail);
       setHistory(Array.isArray(detail.history) ? detail.history : []);
       setIndicators(parseIndicators(detail.indicators));
@@ -103,13 +97,13 @@ const StockDetail = () => {
               <h2 className="mb-1">{stockData.name || symbol}</h2>
               <div className="text-muted mb-3">{stockData.symbol || symbol}</div>
               <div className={`h3 mb-1 ${changeClass}`}>
-                ¥{price.toFixed(2)} ({changePercent >= 0 ? '+' : ''}
+                {price.toFixed(2)} ({changePercent >= 0 ? '+' : ''}
                 {changePercent.toFixed(2)}%)
               </div>
             </Col>
             <Col md={4} className="text-md-end">
               <Button variant="success" className="me-2 mb-2 mb-md-0" onClick={() => navigate(`/predictions?stock=${symbol}`)}>
-                {isEnglish ? 'Go to Forecast' : '去预测'}
+                {isEnglish ? 'Go to Forecast' : '查看预测'}
               </Button>
               <Button variant="primary" onClick={() => navigate(`/ai-chat?stock=${symbol}`)}>
                 {isEnglish ? 'AI Analysis' : 'AI 分析'}

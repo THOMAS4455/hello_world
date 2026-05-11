@@ -21,6 +21,17 @@ class TestIntegration:
     def client(self):
         return TestClient(app_module.app)
 
+    @pytest.fixture
+    def isolated_auth_storage(self, tmp_path, monkeypatch):
+        auth = app_module.auth_service
+        users_file = tmp_path / "users.json"
+        sessions_file = tmp_path / "sessions.json"
+        monkeypatch.setattr(auth, "_users_file", users_file)
+        monkeypatch.setattr(auth, "_sessions_file", sessions_file)
+        auth._sessions = {}
+        auth._refresh_index = {}
+        return auth
+
     def test_api_health_check(self, client):
         response = client.get("/health")
         assert response.status_code == 200
@@ -66,12 +77,86 @@ class TestIntegration:
         assert data["success"] is True
         assert "response" in data["data"]
 
+    def test_user_profile_requires_bearer_token(self, client):
+        response = client.get("/api/user/profile")
+        assert response.status_code == 401
+
+        data = response.json()
+        assert data["success"] is False
+        assert "Authorization" in data["message"]
+
+    def test_news_sources_validation(self, client):
+        response = client.get("/api/news/realtime?sources=invalid")
+        assert response.status_code == 422
+
+        data = response.json()
+        assert data["success"] is False
+        assert "allowed_sources" in data["data"]
+
+    def test_register_request_validation(self, client):
+        response = client.post(
+            "/api/auth/register",
+            json={"username": "ab", "email": "bad-email", "password": "123"},
+        )
+        assert response.status_code == 422
+
+        data = response.json()
+        assert data["success"] is False
+        assert data["message"] == "Request validation failed"
+
     def test_error_handling_integration(self, client):
         response = client.get("/api/nonexistent")
         assert response.status_code == 404
 
         response = client.post("/health")
         assert response.status_code == 405
+
+    def test_auth_refresh_and_profile(self, client, isolated_auth_storage):
+        register_response = client.post(
+            "/api/auth/register",
+            json={"username": "reviewer", "email": "reviewer@example.com", "password": "secret123"},
+        )
+        assert register_response.status_code == 200
+        assert register_response.json()["success"] is True
+
+        login_response = client.post(
+            "/api/auth/login",
+            json={"username": "reviewer", "password": "secret123"},
+        )
+        assert login_response.status_code == 200
+        login_payload = login_response.json()["data"]
+        assert login_payload["token"]
+        assert login_payload["refreshToken"]
+
+        profile_response = client.get(
+            "/api/user/profile",
+            headers={"Authorization": f"Bearer {login_payload['token']}"},
+        )
+        assert profile_response.status_code == 200
+        assert profile_response.json()["data"]["user"]["username"] == "reviewer"
+
+        refresh_response = client.post(
+            "/api/auth/refresh",
+            json={"refresh_token": login_payload["refreshToken"]},
+        )
+        assert refresh_response.status_code == 200
+        refresh_payload = refresh_response.json()["data"]
+        assert refresh_payload["token"] != login_payload["token"]
+        assert refresh_payload["refreshToken"] != login_payload["refreshToken"]
+
+        logout_response = client.post(
+            "/api/auth/logout",
+            headers={"Authorization": f"Bearer {refresh_payload['token']}"},
+        )
+        assert logout_response.status_code == 200
+        assert logout_response.json()["success"] is True
+
+        expired_profile = client.get(
+            "/api/user/profile",
+            headers={"Authorization": f"Bearer {refresh_payload['token']}"},
+        )
+        assert expired_profile.status_code == 200
+        assert expired_profile.json()["success"] is False
 
     def test_cors_headers(self, client):
         response = client.options(

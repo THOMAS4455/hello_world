@@ -6,15 +6,6 @@ import PageLogo from '../components/PageLogo';
 import stockApiService from '../services/stockApi';
 import '../styles/Home.css';
 
-const resolveNewsLink = (item) => {
-  const raw = String(item?.url || '').trim();
-  if (raw && /^https?:\/\//i.test(raw)) {
-    return raw;
-  }
-  const title = encodeURIComponent(String(item?.title || '').trim());
-  return `https://www.bing.com/news/search?q=${title}`;
-};
-
 const Home = () => {
   const { language } = useAppI18n();
   const isEnglish = language === 'en-US';
@@ -22,7 +13,7 @@ const Home = () => {
   const [keyword, setKeyword] = useState('');
   const [newsLimit, setNewsLimit] = useState(80);
   const [useSina, setUseSina] = useState(true);
-  const [useAkshare, setUseAkshare] = useState(true);
+  const [useAkshare, setUseAkshare] = useState(false);
   const [newsItems, setNewsItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -32,57 +23,65 @@ const Home = () => {
     () =>
       isEnglish
         ? [
-            { title: 'Forecasts', desc: 'Multi-model voting with confidence outputs', path: '/predictions' },
-            { title: 'Backtests', desc: 'Benchmark comparison and stability validation', path: '/backtest' },
-            { title: 'Sentiment', desc: 'Market-wide news and breadth scoring', path: '/market-sentiment' },
-            { title: 'AI Insights', desc: 'Natural language trading explanations', path: '/ai-chat' },
+            { title: 'Forecasts', desc: 'Direction, confidence, and AI reasoning in one view.', path: '/predictions' },
+            { title: 'Backtests', desc: 'Validate signal quality against historical windows.', path: '/backtest' },
+            { title: 'Sentiment', desc: 'Track headline pressure and market breadth quickly.', path: '/market-sentiment' },
+            { title: 'AI Insights', desc: 'Ask for plain-language explanations before a trade.', path: '/ai-chat' },
           ]
         : [
-            { title: '智能预测', desc: '多模型投票与置信区间输出', path: '/predictions' },
-            { title: '回测评估', desc: '策略基线对比与稳健性验证', path: '/backtest' },
-            { title: '市场情绪', desc: '全市场新闻舆情融合评分', path: '/market-sentiment' },
-            { title: 'AI 研判', desc: '自然语言生成交易解释', path: '/ai-chat' },
+            { title: '智能预测', desc: '在同一视图中查看方向、置信度和 AI 解释。', path: '/predictions' },
+            { title: '回测评估', desc: '用历史窗口快速验证策略信号质量。', path: '/backtest' },
+            { title: '市场情绪', desc: '快速观察新闻压力与市场宽度变化。', path: '/market-sentiment' },
+            { title: 'AI 研判', desc: '在下单前获得自然语言解释与提示。', path: '/ai-chat' },
           ],
     [isEnglish]
   );
 
-  const sourceText = useMemo(() => {
-    const list = [];
-    if (useSina) list.push('sina');
-    if (useAkshare) list.push('akshare');
-    return list.join(',');
-  }, [useSina, useAkshare]);
+  const activeSources = useMemo(() => {
+    const items = [];
+    if (useSina) items.push('sina');
+    if (useAkshare) items.push('akshare');
+    return items;
+  }, [useAkshare, useSina]);
+
+  const sourceText = useMemo(() => activeSources.join(', '), [activeSources]);
 
   const fetchNews = useCallback(
     async (force = false) => {
-      if (!sourceText) {
-        setError(isEnglish ? 'Please select at least one news source.' : '请至少选择一个新闻来源');
+      if (activeSources.length === 0) {
+        setError(isEnglish ? 'Select at least one news source.' : '至少选择一个新闻来源。');
         return;
       }
+
       setLoading(true);
       setError('');
+
       try {
         const params = new URLSearchParams();
         params.append('limit', String(Math.max(20, Math.min(400, Number(newsLimit) || 80))));
-        params.append('sources', sourceText);
+        params.append('sources', activeSources.join(','));
         if (keyword.trim()) params.append('keyword', keyword.trim());
         if (force) stockApiService.clearCache('/api/news/realtime');
+
         const resp = await stockApiService.request(`/api/news/realtime?${params.toString()}`, {
           method: 'GET',
         });
+
         if (!resp?.success) {
-          throw new Error(resp?.message || (isEnglish ? 'Failed to load financial news.' : '加载财经新闻失败'));
+          throw new Error(resp?.message || (isEnglish ? 'Failed to load financial news.' : '加载财经新闻失败。'));
         }
-        setNewsItems(Array.isArray(resp?.data?.items) ? resp.data.items : []);
+
+        const items = Array.isArray(resp?.data?.items) ? resp.data.items : [];
+        setNewsItems(items);
         setUpdatedAt(new Date().toLocaleTimeString());
-      } catch (e) {
+      } catch (err) {
         setNewsItems([]);
-        setError(e?.message || (isEnglish ? 'Failed to load financial news.' : '加载财经新闻失败'));
+        setError(err?.message || (isEnglish ? 'Failed to load financial news.' : '加载财经新闻失败。'));
       } finally {
         setLoading(false);
       }
     },
-    [isEnglish, keyword, newsLimit, sourceText]
+    [activeSources, isEnglish, keyword, newsLimit]
   );
 
   useEffect(() => {
@@ -91,34 +90,33 @@ const Home = () => {
 
   return (
     <div className="analysis-page home-page">
-      <section className="home-hero mb-3">
+      <section className="home-hero mb-4">
         <div className="home-hero-main">
-          <PageLogo title="AlphaScope Live" subtitle="Market Intelligence" glyph="S" tone="orange" />
-          <Badge bg="light" text="dark">
-            Quant x AI
-          </Badge>
-          <h1>{isEnglish ? 'AlphaScope Intelligent Research Cockpit' : 'AlphaScope 智能投研驾驶舱'}</h1>
+          <PageLogo title="AlphaScope Live" subtitle="Market intelligence workspace" glyph="S" tone="orange" />
+          <Badge>Quant x AI</Badge>
+          <h1>{isEnglish ? 'A cleaner pre-trade research desk.' : '面向交易前决策的投研工作台。'}</h1>
           <p>
             {isEnglish
-              ? 'Built for pre-trade decisions by combining live financial news, quantitative forecasts, backtests, and sentiment analysis into one explainable workflow.'
-              : '面向交易前决策场景，融合实时财经新闻、量化预测、回测验证与市场情绪分析。你看到的不只是信号，而是可解释、可验证、可执行的结论链路。'}
+              ? 'Monitor realtime financial headlines, move into prediction and backtest views, and keep the workflow focused on decision-making instead of page chrome.'
+              : '在一个界面里查看实时财经新闻、进入预测与回测模块，并把注意力放在决策本身，而不是分散的页面装饰上。'}
           </p>
           <div className="home-hero-actions">
             <Button onClick={() => navigate('/dashboard')}>
               {isEnglish ? 'Open Market Overview' : '进入市场总览'}
             </Button>
             <Button variant="outline-primary" onClick={() => navigate('/predictions')}>
-              {isEnglish ? 'Start Forecasting' : '开始智能预测'}
+              {isEnglish ? 'Run Forecasts' : '进入预测模块'}
             </Button>
           </div>
         </div>
+
         <div className="home-hero-side">
           <div className="hero-stat">
-            <span>{isEnglish ? 'News Samples' : '新闻样本'}</span>
+            <span>{isEnglish ? 'Headline Count' : '新闻条数'}</span>
             <strong>{newsItems.length}</strong>
           </div>
           <div className="hero-stat">
-            <span>{isEnglish ? 'Data Sources' : '数据来源'}</span>
+            <span>{isEnglish ? 'Live Sources' : '数据来源'}</span>
             <strong>{sourceText || '-'}</strong>
           </div>
           <div className="hero-stat">
@@ -128,10 +126,10 @@ const Home = () => {
         </div>
       </section>
 
-      <Row className="g-3 mb-3">
+      <Row className="g-3 mb-4">
         {moduleCards.map((item) => (
           <Col md={6} xl={3} key={item.title}>
-            <Card className="module-card h-100" role="button" onClick={() => navigate(item.path)}>
+            <Card className="module-card" role="button" onClick={() => navigate(item.path)}>
               <Card.Body>
                 <div className="module-title">{item.title}</div>
                 <div className="module-desc">{item.desc}</div>
@@ -141,88 +139,111 @@ const Home = () => {
         ))}
       </Row>
 
-      <Card className="mb-3">
+      <Card className="home-command-card mb-4">
         <Card.Body>
-          <Row className="g-3 align-items-end">
-            <Col md={4}>
-              <Form.Group>
-                <Form.Label>{isEnglish ? 'Keyword Focus' : '定向关键词'}</Form.Label>
-                <Form.Control
-                  value={keyword}
-                  onChange={(e) => setKeyword(e.target.value)}
-                  placeholder={isEnglish ? 'For example: AI, chips, rate cut' : '例如：AI、半导体、降息'}
-                />
-              </Form.Group>
-            </Col>
-            <Col md={2}>
-              <Form.Group>
-                <Form.Label>{isEnglish ? 'News Limit' : '抓取条数'}</Form.Label>
-                <Form.Control
-                  type="number"
-                  min={20}
-                  max={400}
-                  value={newsLimit}
-                  onChange={(e) => setNewsLimit(Number(e.target.value || 80))}
-                />
-              </Form.Group>
-            </Col>
-            <Col md={3}>
+          <div className="mb-3">
+            <h2 className="home-section-title">{isEnglish ? 'News Console' : '新闻控制台'}</h2>
+            <p className="home-section-subtitle">
+              {isEnglish
+                ? 'Prioritize finance headlines with real source links. Sina is enabled by default because it usually returns better article URLs.'
+                : '优先抓取带真实来源链接的财经新闻。默认启用新浪，因为它通常能返回更可靠的原文地址。'}
+            </p>
+          </div>
+
+          <div className="home-filter-grid">
+            <Form.Group>
+              <Form.Label>{isEnglish ? 'Keyword Focus' : '关键词'}</Form.Label>
+              <Form.Control
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                placeholder={isEnglish ? 'AI, chips, policy easing...' : 'AI、芯片、政策宽松...'}
+              />
+            </Form.Group>
+
+            <Form.Group>
+              <Form.Label>{isEnglish ? 'News Limit' : '数量上限'}</Form.Label>
+              <Form.Control
+                type="number"
+                min={20}
+                max={400}
+                value={newsLimit}
+                onChange={(e) => setNewsLimit(Number(e.target.value || 80))}
+              />
+            </Form.Group>
+
+            <div>
               <Form.Label>{isEnglish ? 'Sources' : '来源'}</Form.Label>
-              <div className="d-flex gap-3">
+              <div className="home-source-group">
                 <Form.Check type="checkbox" label="Sina" checked={useSina} onChange={(e) => setUseSina(e.target.checked)} />
                 <Form.Check type="checkbox" label="AKShare" checked={useAkshare} onChange={(e) => setUseAkshare(e.target.checked)} />
               </div>
-            </Col>
-            <Col md={3}>
+            </div>
+
+            <div className="home-filter-actions">
               <Button onClick={() => fetchNews(true)} disabled={loading}>
                 {loading ? (
                   <>
                     <Spinner animation="border" size="sm" className="me-2" />
-                    {isEnglish ? 'Fetching...' : '抓取中...'}
+                    {isEnglish ? 'Refreshing...' : '刷新中...'}
                   </>
                 ) : (
-                  isEnglish ? 'Refresh News' : '刷新新闻'
+                  isEnglish ? 'Refresh Feed' : '刷新新闻流'
                 )}
               </Button>
-            </Col>
-          </Row>
+            </div>
+          </div>
         </Card.Body>
       </Card>
 
       {error && <Card className="mb-3 p-3 text-danger">{error}</Card>}
 
-      <Card>
-        <Card.Header className="d-flex justify-content-between align-items-center">
-          <span>{isEnglish ? 'Realtime Financial News Feed' : '实时财经新闻流'}</span>
-          <Badge bg="light" text="dark">
-            {isEnglish ? 'Latest Update ' : '最新更新 '}
-            {updatedAt || '--:--:--'}
-          </Badge>
-        </Card.Header>
+      <Card className="home-feed-card">
         <Card.Body>
+          <div className="home-feed-header">
+            <div>
+              <h2 className="home-section-title">{isEnglish ? 'Realtime Financial Headlines' : '实时财经头条'}</h2>
+              <p className="home-section-subtitle">
+                {isEnglish
+                  ? 'Only real fetched headlines are shown. Items without original URLs are displayed as plain text.'
+                  : '这里展示的都是真实抓取结果。没有原文链接的条目会按纯文本展示，不再伪装成可点击新闻。'}
+              </p>
+            </div>
+            <Badge>
+              {isEnglish ? 'Updated ' : '更新于 '}
+              {updatedAt || '--:--:--'}
+            </Badge>
+          </div>
+
           {loading && newsItems.length === 0 ? (
             <div className="py-4 text-center">
               <Spinner animation="border" />
             </div>
           ) : newsItems.length === 0 ? (
-            <div className="text-muted">
-              {isEnglish ? 'No news data is currently available to display.' : '当前没有可展示的新闻数据'}
-            </div>
+            <div className="empty-state">{isEnglish ? 'No news available right now.' : '当前暂无新闻。'}</div>
           ) : (
-            <div className="home-news-list">
-              {newsItems.map((item, idx) => (
-                <article className="home-news-item" key={`${item.title}-${idx}`}>
-                  <div className="home-news-title">
-                    <a href={resolveNewsLink(item)} target="_blank" rel="noreferrer">
-                      {item.title}
-                    </a>
-                  </div>
-                  <div className="home-news-meta">
-                    <Badge bg="info">{item.source || 'unknown'}</Badge>
-                    <span>{item.time || ''}</span>
-                  </div>
-                </article>
-              ))}
+            <div className="news-feed-list">
+              {newsItems.map((item, index) => {
+                const href = item?.url || item?.link || '';
+                return (
+                  <Card className="news-feed-item" key={`${item?.title || 'news'}-${index}`}>
+                    <Card.Body>
+                      <div className="news-feed-meta">
+                        <Badge bg="light" text="dark">{item?.source || (isEnglish ? 'Source' : '来源')}</Badge>
+                        <span>{item?.time || item?.published_at || '--'}</span>
+                      </div>
+                      <div className="news-feed-title">{item?.title || (isEnglish ? 'Untitled news item' : '未命名新闻')}</div>
+                      {item?.summary && <div className="news-feed-summary">{item.summary}</div>}
+                      {href ? (
+                        <Button variant="link" className="px-0" href={href} target="_blank" rel="noreferrer">
+                          {isEnglish ? 'Read source' : '查看原文'}
+                        </Button>
+                      ) : (
+                        <div className="text-muted small">{isEnglish ? 'No source URL available.' : '暂无原文链接。'}</div>
+                      )}
+                    </Card.Body>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </Card.Body>

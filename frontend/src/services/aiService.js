@@ -1,6 +1,6 @@
 class AIService {
   constructor() {
-    this.baseUrl = 'http://localhost:8000';
+    this.baseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
   }
 
   async _post(path, body) {
@@ -33,21 +33,21 @@ class AIService {
   }
 
   async predictMarket(currentPrice, technicalIndicators, priceHistory, marketContext, days = 5) {
-    const prompt = `请根据以下信息做${days}天市场预测: 当前价格=${currentPrice}, 技术指标=${JSON.stringify(
+    const prompt = `请根据以下信息做 ${days} 天市场预测。当前价格=${currentPrice}，技术指标=${JSON.stringify(
       technicalIndicators || {}
-    )}, 价格历史=${JSON.stringify((priceHistory || []).slice(-30))}, 市场上下文=${marketContext || ''}`;
+    )}，价格历史=${JSON.stringify((priceHistory || []).slice(-30))}，市场背景=${marketContext || ''}`;
     return this._post('/api/ai/analyze', { query: prompt });
   }
 
   async analyzeTechnical(technicalIndicators, currentPrice, priceHistory) {
-    const prompt = `请做技术面分析: 当前价格=${currentPrice}, 技术指标=${JSON.stringify(
+    const prompt = `请做技术面分析：当前价格=${currentPrice}，技术指标=${JSON.stringify(
       technicalIndicators || {}
-    )}, 历史价格=${JSON.stringify((priceHistory || []).slice(-30))}`;
+    )}，历史价格=${JSON.stringify((priceHistory || []).slice(-30))}`;
     return this._post('/api/ai/analyze', { query: prompt });
   }
 
   async assessRisk(symbol, currentSituation, marketEnvironment, positionInfo) {
-    const prompt = `请评估股票${symbol}风险。当前情况=${currentSituation}; 市场环境=${marketEnvironment}; 持仓信息=${JSON.stringify(
+    const prompt = `请评估股票 ${symbol} 的风险。当前情况=${currentSituation}; 市场环境=${marketEnvironment}; 持仓信息=${JSON.stringify(
       positionInfo || {}
     )}`;
     return this._post('/api/ai/analyze', { query: prompt });
@@ -55,10 +55,10 @@ class AIService {
 
   async comprehensiveAnalysis(symbol, currentPrice, priceHistory, marketContext) {
     const [sentiment, prediction, technical, risk] = await Promise.all([
-      this.analyzeSentiment(`分析${symbol}市场情绪`),
+      this.analyzeSentiment(`分析 ${symbol} 的市场情绪`),
       this.predictMarket(currentPrice, {}, priceHistory, marketContext, 5),
       this.analyzeTechnical({}, currentPrice, priceHistory),
-      this.assessRisk(symbol, `当前价${currentPrice}`, marketContext, { symbol, currentPrice }),
+      this.assessRisk(symbol, `当前价格=${currentPrice}`, marketContext, { symbol, currentPrice }),
     ]);
 
     return {
@@ -127,4 +127,5 @@ class AIService {
 }
 
 const aiService = new AIService();
+
 export default aiService;

@@ -31,7 +31,7 @@ const Login = () => {
     const username = formData.username.trim();
     const password = formData.password;
     if (!username || !password) {
-      setLocalError(isEnglish ? 'Please enter both username and password.' : '请输入用户名和密码');
+      setLocalError(isEnglish ? 'Please enter both username and password.' : '请输入用户名和密码。');
       return;
     }
 
@@ -39,7 +39,7 @@ const Login = () => {
       dispatch(loginStart());
       const response = await login({ username, password }).unwrap();
       if (!response?.success || !response?.data) {
-        throw new Error(response?.message || (isEnglish ? 'Login failed' : '登录失败'));
+        throw new Error(response?.message || (isEnglish ? 'Login failed.' : '登录失败。'));
       }
       dispatch(loginSuccess(response.data));
       navigate(redirectTo, { replace: true });
@@ -47,7 +47,7 @@ const Login = () => {
       const message =
         err?.data?.message ||
         err?.message ||
-        (isEnglish ? 'Login failed. Please try again later.' : '登录失败，请稍后重试');
+        (isEnglish ? 'Login failed. Please try again later.' : '登录失败，请稍后再试。');
       dispatch(loginFailure(message));
       setLocalError(message);
     }
@@ -61,17 +61,31 @@ const Login = () => {
             <Card className="auth-side-card w-100">
               <Card.Body>
                 <PageLogo title="AlphaScope" subtitle="Secure Sign-in" glyph="L" tone="orange" compact />
-                <div className="auth-side-tag">{isEnglish ? 'Intelligent Research Platform' : '智能投研平台'}</div>
+                <div className="auth-side-tag">
+                  {isEnglish ? 'Intelligent Research Platform' : '智能投研平台'}
+                </div>
                 <h1 className="auth-side-title">{isEnglish ? 'Welcome back' : '欢迎回来'}</h1>
                 <p className="auth-side-text">
                   {isEnglish
                     ? 'After logging in, you can continue using forecasts, backtests, and sentiment tools while keeping your personal settings synced.'
-                    : '登录后你可以继续使用预测、回测和市场情绪功能，并同步个人设置与分析偏好。'}
+                    : '登录后可以继续使用预测、回测和市场情绪工具，同时保留你的个人设置与分析偏好。'}
                 </p>
                 <div className="auth-side-points">
-                  <div>{isEnglish ? 'Realtime quotes linked with market-wide data' : '实时行情与全市场数据联动'}</div>
-                  <div>{isEnglish ? 'Visualized multi-model forecasts and backtests' : '多模型预测与回测结果可视化'}</div>
-                  <div>{isEnglish ? 'Sentiment capture with keyword targeting' : '市场情绪抓取支持定向关键词'}</div>
+                  <div>
+                    {isEnglish
+                      ? 'Realtime quotes linked with market-wide data'
+                      : '实时行情与全市场数据联动'}
+                  </div>
+                  <div>
+                    {isEnglish
+                      ? 'Visualized multi-model forecasts and backtests'
+                      : '多模型预测与回测结果可视化'}
+                  </div>
+                  <div>
+                    {isEnglish
+                      ? 'Sentiment capture with keyword targeting'
+                      : '支持按关键词定向抓取市场情绪'}
+                  </div>
                 </div>
               </Card.Body>
             </Card>
@@ -81,7 +95,7 @@ const Login = () => {
             <Card className="auth-form-card w-100">
               <Card.Body>
                 <PageLogo title="Login" subtitle="Account Access" glyph="L" tone="blue" compact />
-                <h2 className="auth-form-title">{isEnglish ? 'Login to your account' : '登录账号'}</h2>
+                <h2 className="auth-form-title">{isEnglish ? 'Login to your account' : '登录账户'}</h2>
                 <p className="auth-form-subtitle">
                   {isEnglish ? 'Sign in with your username or email' : '支持用户名或邮箱登录'}
                 </p>

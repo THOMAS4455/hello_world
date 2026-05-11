@@ -4,6 +4,7 @@ import { useAppI18n } from '../i18n';
 import AIChatInterface from '../components/AIChatInterface';
 import { handleApiError } from '../components/ErrorHandler';
 import PageLogo from '../components/PageLogo';
+import stockApiService from '../services/stockApi';
 import '../styles/AIChat.css';
 
 const AIChat = () => {
@@ -39,18 +40,7 @@ const AIChat = () => {
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:8000/api/ai/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: messageText }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      const payload = data?.data || {};
+      const payload = await stockApiService.sendAIMessage(messageText);
       const aiMessage = {
         id: Date.now() + 1,
         content:
@@ -89,7 +79,7 @@ const AIChat = () => {
           <PageLogo title="AI Assistant" subtitle="Conversational Research" glyph="Q" tone="teal" />
           <div className="ai-chat-title mt-2">{isEnglish ? 'AI Investment Assistant' : 'AI 投资助手'}</div>
           <div className="ai-chat-subtitle">
-            {isEnglish ? 'Supports stock analysis, strategy suggestions, and risk judgment' : '支持股票分析、策略建议、风险判断'}
+            {isEnglish ? 'Supports stock analysis, strategy suggestions, and risk judgment' : '支持股票分析、策略建议和风险判断'}
           </div>
         </Card.Header>
         <Card.Body className="p-0">

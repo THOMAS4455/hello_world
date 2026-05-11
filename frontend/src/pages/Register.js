@@ -36,32 +36,32 @@ const Register = () => {
     const confirmPassword = formData.confirmPassword;
 
     if (!username || !email || !password || !confirmPassword) {
-      setError(isEnglish ? 'Please complete the registration form.' : '请完整填写注册信息');
+      setError(isEnglish ? 'Please complete the registration form.' : '请完整填写注册信息。');
       return;
     }
     if (password.length < 6) {
-      setError(isEnglish ? 'Password must be at least 6 characters.' : '密码至少 6 位');
+      setError(isEnglish ? 'Password must be at least 6 characters.' : '密码至少需要 6 个字符。');
       return;
     }
     if (password !== confirmPassword) {
-      setError(isEnglish ? 'The passwords do not match.' : '两次输入的密码不一致');
+      setError(isEnglish ? 'The passwords do not match.' : '两次输入的密码不一致。');
       return;
     }
 
     try {
       const response = await registerUser({ username, email, password }).unwrap();
       if (!response?.success) {
-        throw new Error(response?.message || (isEnglish ? 'Registration failed' : '注册失败'));
+        throw new Error(response?.message || (isEnglish ? 'Registration failed.' : '注册失败。'));
       }
       setSuccess(
-        isEnglish ? 'Registration successful. Redirecting to the login page...' : '注册成功，正在跳转到登录页'
+        isEnglish ? 'Registration successful. Redirecting to the login page...' : '注册成功，正在跳转到登录页...'
       );
       setTimeout(() => navigate('/login'), 1200);
     } catch (err) {
       setError(
         err?.data?.message ||
           err?.message ||
-          (isEnglish ? 'Registration failed. Please try again later.' : '注册失败，请稍后重试')
+          (isEnglish ? 'Registration failed. Please try again later.' : '注册失败，请稍后再试。')
       );
     }
   };
@@ -74,17 +74,31 @@ const Register = () => {
             <Card className="auth-side-card w-100">
               <Card.Body>
                 <PageLogo title="AlphaScope" subtitle="Create Account" glyph="R" tone="teal" compact />
-                <div className="auth-side-tag">{isEnglish ? 'New User Registration' : '新用户注册'}</div>
-                <h1 className="auth-side-title">{isEnglish ? 'Create your account' : '创建你的账号'}</h1>
+                <div className="auth-side-tag">
+                  {isEnglish ? 'New User Registration' : '新用户注册'}
+                </div>
+                <h1 className="auth-side-title">{isEnglish ? 'Create your account' : '创建你的账户'}</h1>
                 <p className="auth-side-text">
                   {isEnglish
                     ? 'After registering, you can save preferences, manage analysis results, and share one account state across pages.'
-                    : '注册后可以保存个人偏好、管理分析结果，并在不同页面共享同一账户状态。'}
+                    : '注册后可以保存个人偏好、管理分析结果，并在不同页面之间共享同一账户状态。'}
                 </p>
                 <div className="auth-side-points">
-                  <div>{isEnglish ? 'One account across forecasts, backtests, and sentiment' : '一个账号贯通预测、回测与情绪分析'}</div>
-                  <div>{isEnglish ? 'Profile and settings can be stored long-term' : '个人资料与设置可长期保存'}</div>
-                  <div>{isEnglish ? 'Ready for future permissions and team collaboration' : '后续可扩展权限体系与团队协作'}</div>
+                  <div>
+                    {isEnglish
+                      ? 'One account across forecasts, backtests, and sentiment'
+                      : '一个账户贯通预测、回测与情绪分析'}
+                  </div>
+                  <div>
+                    {isEnglish
+                      ? 'Profile and settings can be stored long-term'
+                      : '个人资料与设置可长期保存'}
+                  </div>
+                  <div>
+                    {isEnglish
+                      ? 'Ready for future permissions and team collaboration'
+                      : '便于后续扩展权限体系与团队协作'}
+                  </div>
                 </div>
               </Card.Body>
             </Card>
@@ -94,9 +108,9 @@ const Register = () => {
             <Card className="auth-form-card w-100">
               <Card.Body>
                 <PageLogo title="Register" subtitle="Join Platform" glyph="R" tone="rose" compact />
-                <h2 className="auth-form-title">{isEnglish ? 'Create account' : '注册账号'}</h2>
+                <h2 className="auth-form-title">{isEnglish ? 'Create account' : '注册账户'}</h2>
                 <p className="auth-form-subtitle">
-                  {isEnglish ? 'Fill in the form to start using the system right away' : '填写信息后即可立即使用系统'}
+                  {isEnglish ? 'Fill in the form to start using the system right away' : '填写信息后即可开始使用系统'}
                 </p>
 
                 {error && <Alert variant="danger">{error}</Alert>}
@@ -130,7 +144,7 @@ const Register = () => {
                       name="password"
                       value={formData.password}
                       onChange={handleChange}
-                      placeholder={isEnglish ? 'At least 6 characters' : '至少 6 位'}
+                      placeholder={isEnglish ? 'At least 6 characters' : '至少 6 个字符'}
                       autoComplete="new-password"
                     />
                   </Form.Group>
@@ -141,7 +155,7 @@ const Register = () => {
                       name="confirmPassword"
                       value={formData.confirmPassword}
                       onChange={handleChange}
-                      placeholder={isEnglish ? 'Enter the password again' : '再次输入密码'}
+                      placeholder={isEnglish ? 'Enter the password again' : '请再次输入密码'}
                       autoComplete="new-password"
                     />
                   </Form.Group>

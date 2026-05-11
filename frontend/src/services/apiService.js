@@ -134,6 +134,21 @@ export const apiService = createApi({
       }),
       invalidatesTags: ['User'],
     }),
+    refreshSession: builder.mutation({
+      query: (refreshToken) => ({
+        url: '/api/auth/refresh',
+        method: 'POST',
+        body: { refresh_token: refreshToken },
+      }),
+      invalidatesTags: ['User'],
+    }),
+    logoutSession: builder.mutation({
+      query: () => ({
+        url: '/api/auth/logout',
+        method: 'POST',
+      }),
+      invalidatesTags: ['User'],
+    }),
     getUserProfile: builder.query({
       query: () => '/api/user/profile',
       providesTags: ['User'],
@@ -187,6 +202,8 @@ export const {
   useGetSystemStatsQuery,
   useLoginMutation,
   useRegisterMutation,
+  useRefreshSessionMutation,
+  useLogoutSessionMutation,
   useGetUserProfileQuery,
   useUpdateUserSettingsMutation,
   useGetAdminUsersQuery,
@@ -226,19 +243,19 @@ export const formatAIResponse = (response) => {
 
 export const formatPredictionResult = (prediction = {}) => ({
   ...prediction,
-  prediction: prediction.prediction === 1 ? '上涨' : prediction.prediction === 0 ? '下跌' : '未知',
+  prediction: prediction.prediction === 1 ? '??' : prediction.prediction === 0 ? '??' : '??',
   confidence: Math.round(Number(prediction.confidence ?? 0) * 100),
-  explanation: prediction.explanation || '暂无解释',
+  explanation: prediction.explanation || '????',
   created_at: new Date().toLocaleString(),
 });
 
 export const handleApiError = (error) => {
-  if (error?.status === 401) return '认证失败，请重新登录';
-  if (error?.status === 403) return '权限不足';
-  if (error?.status === 404) return '请求资源不存在';
-  if (error?.status === 429) return '请求过于频繁，请稍后再试';
-  if (error?.status >= 500) return '服务端错误，请稍后再试';
-  return error?.data?.message || error?.message || '未知错误';
+  if (error?.status === 401) return '??????????';
+  if (error?.status === 403) return '????';
+  if (error?.status === 404) return '???????';
+  if (error?.status === 429) return '????????????';
+  if (error?.status >= 500) return '???????????';
+  return error?.data?.message || error?.message || '????';
 };
 
 export const retryQuery = (fn, maxRetries = 3, delay = 1000) => {

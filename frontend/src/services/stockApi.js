@@ -1,485 +1,334 @@
-/**
- * 股票API服务
- * 统一管理所有股票相关的API调用
- */
-
-import { formatPrice, formatChange, formatVolume } from '../utils/stockUtils';
+import { formatChange, formatPrice, formatVolume } from '../utils/stockUtils';
 
 class StockApiService {
   constructor() {
     this.baseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
     this.cache = new Map();
-    this.cacheTimeout = 30000; // 30秒缓存
+    this.cacheTimeout = 30000;
   }
 
-  /**
-   * 获取缓存键
-   * @param {string} endpoint - API端点
-   * @param {object} params - 参数
-   * @returns {string} 缓存键
-   */
   getCacheKey(endpoint, params = {}) {
     return `${endpoint}:${JSON.stringify(params)}`;
   }
 
-  /**
-   * 检查缓存
-   * @param {string} key - 缓存键
-   * @returns {object|null} 缓存数据或null
-   */
   getCachedData(key) {
     const cached = this.cache.get(key);
-    if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
-      return cached.data;
+    if (!cached) {
+      return null;
     }
-    return null;
+
+    if (Date.now() - cached.timestamp >= this.cacheTimeout) {
+      this.cache.delete(key);
+      return null;
+    }
+
+    return cached.data;
   }
 
-  /**
-   * 设置缓存
-   * @param {string} key - 缓存键
-   * @param {any} data - 数据
-   */
   setCachedData(key, data) {
     this.cache.set(key, {
       data,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }
 
-  /**
-   * 清除缓存
-   * @param {string} pattern - 清除模式
-   */
   clearCache(pattern = null) {
-    if (pattern) {
-      for (const key of this.cache.keys()) {
-        if (key.includes(pattern)) {
-          this.cache.delete(key);
-        }
-      }
-    } else {
+    if (!pattern) {
       this.cache.clear();
+      return;
+    }
+
+    for (const key of this.cache.keys()) {
+      if (key.includes(pattern)) {
+        this.cache.delete(key);
+      }
     }
   }
 
-  /**
-   * 通用API请求
-   * @param {string} endpoint - API端点
-   * @param {object} options - 请求选项
-   * @returns {Promise} API响应
-   */
+  buildQuery(params = {}) {
+    const searchParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === '') {
+        return;
+      }
+      if (Array.isArray(value)) {
+        if (value.length > 0) {
+          searchParams.append(key, value.join(','));
+        }
+        return;
+      }
+      searchParams.append(key, String(value));
+    });
+    const query = searchParams.toString();
+    return query ? `?${query}` : '';
+  }
+
+  getAuthHeaders() {
+    try {
+      const raw = localStorage.getItem('persist:root');
+      if (!raw) {
+        return {};
+      }
+      const parsed = JSON.parse(raw);
+      const authState = parsed?.auth ? JSON.parse(parsed.auth) : null;
+      const token = authState?.token;
+      return token ? { Authorization: `Bearer ${token}` } : {};
+    } catch {
+      return {};
+    }
+  }
+
+  normalizeError(status, payload, fallback = 'Request failed') {
+    if (payload?.message) {
+      return new Error(payload.message);
+    }
+    return new Error(`${fallback}: ${status}`);
+  }
+
+  normalizeStock(stock = {}) {
+    return {
+      ...stock,
+      formattedPrice: formatPrice(stock.price ?? stock.current_price),
+      formattedChange: formatChange(stock.change, stock.change_percent),
+      formattedVolume: formatVolume(stock.volume),
+    };
+  }
+
   async request(endpoint, options = {}) {
-    const url = `${this.baseUrl}${endpoint}`;
-    const config = {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-      },
-      ...options
+    const query = options.params ? this.buildQuery(options.params) : '';
+    const url = `${this.baseUrl}${endpoint}${query}`;
+    const method = options.method || 'GET';
+    const headers = {
+      ...this.getAuthHeaders(),
+      ...options.headers,
     };
 
-    try {
-      const response = await fetch(url, config);
-      
-      if (!response.ok) {
-        throw new Error(`API请求失败: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('API请求错误:', error);
-      throw error;
+    if (options.body !== undefined && !headers['Content-Type']) {
+      headers['Content-Type'] = 'application/json';
     }
+
+    const response = await fetch(url, {
+      method,
+      headers,
+      body: options.body,
+    });
+
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
+    }
+
+    if (!response.ok || payload?.success === false) {
+      throw this.normalizeError(response.status, payload);
+    }
+
+    return payload;
   }
 
-  /**
-   * 获取股票列表
-   * @param {object} params - 查询参数
-   * @returns {Promise} 股票列表
-   */
   async getStocks(params = {}) {
     const effectiveParams = {
       limit: 600,
-      ...params
+      ...params,
     };
     const cacheKey = this.getCacheKey('/api/stocks', effectiveParams);
     const cached = this.getCachedData(cacheKey);
-    
     if (cached) {
       return cached;
     }
 
-    try {
-      const searchParams = new URLSearchParams();
-      Object.entries(effectiveParams).forEach(([k, v]) => {
-        if (v !== undefined && v !== null && v !== '') {
-          searchParams.append(k, String(v));
-        }
-      });
-      const query = searchParams.toString();
-      const endpoint = query ? `/api/stocks?${query}` : '/api/stocks';
-
-      const response = await this.request(endpoint, {
-        method: 'GET'
-      });
-
-      const stocks = response.data?.stocks || [];
-      
-      // 格式化股票数据
-      const formattedStocks = stocks.map(stock => ({
-        ...stock,
-        formattedPrice: formatPrice(stock.price),
-        formattedChange: formatChange(stock.change, stock.change_percent),
-        formattedVolume: formatVolume(stock.volume)
-      }));
-
-      this.setCachedData(cacheKey, formattedStocks);
-      return formattedStocks;
-    } catch (error) {
-      console.error('获取股票列表失败:', error);
-      throw error;
-    }
+    const response = await this.request('/api/stocks', {
+      method: 'GET',
+      params: effectiveParams,
+    });
+    const stocks = Array.isArray(response?.data?.stocks) ? response.data.stocks : [];
+    const formattedStocks = stocks.map((stock) => this.normalizeStock(stock));
+    this.setCachedData(cacheKey, formattedStocks);
+    return formattedStocks;
   }
 
-  /**
-   * 获取股票详情
-   * @param {string} symbol - 股票代码
-   * @returns {Promise} 股票详情
-   */
-  async getStockDetail(symbol) {
+  async getMarketOverview(params = {}) {
+    const cacheKey = this.getCacheKey('/api/stocks/market-overview', params);
+    const cached = this.getCachedData(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const response = await this.request('/api/stocks/market-overview', {
+      method: 'GET',
+      params,
+    });
+    this.setCachedData(cacheKey, response.data || null);
+    return response.data || null;
+  }
+
+  async getStockDetail(symbol, options = {}) {
     if (!symbol) {
-      throw new Error('股票代码不能为空');
+      throw new Error('Stock symbol is required');
     }
 
-    const cacheKey = this.getCacheKey(`/api/stocks/${symbol}`);
+    const cacheKey = this.getCacheKey(`/api/stocks/${symbol}`, options);
     const cached = this.getCachedData(cacheKey);
-    
     if (cached) {
       return cached;
     }
 
-    try {
-      const response = await this.request(`/api/stocks/${symbol}`);
-      
-      if (!response.success) {
-        throw new Error(response.message || '获取股票详情失败');
-      }
-
-      const stock = response.data;
-      
-      // 格式化股票数据
-      const formattedStock = {
-        ...stock,
-        formattedPrice: formatPrice(stock.price),
-        formattedChange: formatChange(stock.change, stock.change_percent),
-        formattedVolume: formatVolume(stock.volume)
-      };
-
-      this.setCachedData(cacheKey, formattedStock);
-      return formattedStock;
-    } catch (error) {
-      console.error('获取股票详情失败:', error);
-      throw error;
-    }
+    const response = await this.request(`/api/stocks/${symbol}`, {
+      method: 'GET',
+      params: options,
+    });
+    const detail = response?.data || {};
+    const formatted = this.normalizeStock(detail);
+    this.setCachedData(cacheKey, formatted);
+    return formatted;
   }
 
-  /**
-   * 搜索股票
-   * @param {string} query - 搜索关键词
-   * @returns {Promise} 搜索结果
-   */
+  async getStockHistory(symbol, options = {}) {
+    const detail = await this.getStockDetail(symbol, options);
+    return Array.isArray(detail.history) ? detail.history : [];
+  }
+
   async searchStocks(query) {
-    if (!query || query.trim().length === 0) {
+    const keyword = String(query || '').trim();
+    if (!keyword) {
       return [];
     }
 
-    const cacheKey = this.getCacheKey('/api/stocks/search', { query });
+    const cacheKey = this.getCacheKey('/api/stocks/search', { q: keyword });
     const cached = this.getCachedData(cacheKey);
-    
     if (cached) {
       return cached;
     }
 
-    try {
-      const response = await this.request('/api/stocks/search', {
-        method: 'POST',
-        body: JSON.stringify({ query })
-      });
-
-      const stocks = response.data?.stocks || [];
-      
-      // 格式化股票数据
-      const formattedStocks = stocks.map(stock => ({
-        ...stock,
-        formattedPrice: formatPrice(stock.price),
-        formattedChange: formatChange(stock.change, stock.change_percent),
-        formattedVolume: formatVolume(stock.volume)
-      }));
-
-      this.setCachedData(cacheKey, formattedStocks);
-      return formattedStocks;
-    } catch (error) {
-      console.error('搜索股票失败:', error);
-      throw error;
-    }
+    const response = await this.request('/api/stocks/search', {
+      method: 'GET',
+      params: { q: keyword },
+    });
+    const stocks = Array.isArray(response?.data?.stocks) ? response.data.stocks : [];
+    const formattedStocks = stocks.map((stock) => this.normalizeStock(stock));
+    this.setCachedData(cacheKey, formattedStocks);
+    return formattedStocks;
   }
 
-  /**
-   * 获取实时股票数据
-   * @param {array} symbols - 股票代码数组
-   * @returns {Promise} 实时数据
-   */
-  async getRealTimeStocks(symbols = []) {
-    if (!Array.isArray(symbols) || symbols.length === 0) {
-      return [];
-    }
-
-    const cacheKey = this.getCacheKey('/api/stocks/realtime', { symbols });
+  async getRealTimeStocks() {
+    const cacheKey = this.getCacheKey('/api/stocks/realtime');
     const cached = this.getCachedData(cacheKey);
-    
     if (cached) {
       return cached;
     }
 
-    try {
-      const response = await this.request('/api/stocks/realtime', {
-        method: 'POST',
-        body: JSON.stringify({ symbols })
-      });
-
-      const stocks = response.data?.stocks || [];
-      
-      // 格式化股票数据
-      const formattedStocks = stocks.map(stock => ({
-        ...stock,
-        formattedPrice: formatPrice(stock.price),
-        formattedChange: formatChange(stock.change, stock.change_percent),
-        formattedVolume: formatVolume(stock.volume)
-      }));
-
-      this.setCachedData(cacheKey, formattedStocks);
-      return formattedStocks;
-    } catch (error) {
-      console.error('获取实时股票数据失败:', error);
-      throw error;
-    }
+    const response = await this.request('/api/stocks/realtime', {
+      method: 'GET',
+    });
+    const stocks = Array.isArray(response?.data?.stocks) ? response.data.stocks : [];
+    const formattedStocks = stocks.map((stock) => this.normalizeStock(stock));
+    this.setCachedData(cacheKey, formattedStocks);
+    return formattedStocks;
   }
 
-  /**
-   * 获取股票预测
-   * @param {string} symbol - 股票代码
-   * @param {object} options - 预测选项
-   * @returns {Promise} 预测结果
-   */
   async getStockPrediction(symbol, options = {}) {
     if (!symbol) {
-      throw new Error('股票代码不能为空');
+      throw new Error('Stock symbol is required');
     }
 
-    try {
-      const response = await this.request('/api/ai/predict', {
-        method: 'POST',
-        body: JSON.stringify({
-          symbol,
-          ...options
-        })
-      });
-
-      if (!response.success) {
-        throw new Error(response.message || '获取预测失败');
-      }
-
-      return response.data;
-    } catch (error) {
-      console.error('获取股票预测失败:', error);
-      throw error;
-    }
+    const params = {
+      symbol,
+      horizon: options.horizon ?? 5,
+      up_threshold: options.upThreshold ?? options.up_threshold ?? 0.02,
+    };
+    const response = await this.request('/api/predictions/predict', {
+      method: 'GET',
+      params,
+    });
+    return response.data;
   }
 
-  /**
-   * 获取AI分析
-   * @param {string} symbol - 股票代码
-   * @param {string} analysisType - 分析类型
-   * @returns {Promise} 分析结果
-   */
-  async getAIAnalysis(symbol, analysisType = 'basic') {
+  async runBacktest(symbol, options = {}) {
     if (!symbol) {
-      throw new Error('股票代码不能为空');
+      throw new Error('Stock symbol is required');
     }
 
-    try {
-      const response = await this.request('/api/ai/analyze', {
-        method: 'POST',
-        body: JSON.stringify({
-          symbol,
-          analysis_type: analysisType
-        })
-      });
-
-      if (!response.success) {
-        throw new Error(response.message || '获取AI分析失败');
-      }
-
-      return response.data;
-    } catch (error) {
-      console.error('获取AI分析失败:', error);
-      throw error;
-    }
+    const params = {
+      symbol,
+      strategy: options.strategy ?? 'default',
+      horizon: options.horizon ?? 5,
+      test_size: options.testSize ?? options.test_size ?? 0.2,
+      up_threshold: options.upThreshold ?? options.up_threshold ?? 0.02,
+    };
+    const response = await this.request('/api/predictions/backtest', {
+      method: 'POST',
+      params,
+    });
+    return response.data;
   }
 
-  /**
-   * 发送AI聊天消息
-   * @param {string} message - 消息内容
-   * @param {object} context - 上下文信息
-   * @returns {Promise} AI回复
-   */
-  async sendAIMessage(message, context = {}) {
-    if (!message || message.trim().length === 0) {
-      throw new Error('消息内容不能为空');
+  async getAIAnalysis(query) {
+    const text = String(query || '').trim();
+    if (!text) {
+      throw new Error('Analysis query is required');
     }
 
-    try {
-      const response = await this.request('/api/ai/chat', {
-        method: 'POST',
-        body: JSON.stringify({
-          message,
-          context
-        })
-      });
-
-      if (!response.success) {
-        throw new Error(response.message || '发送消息失败');
-      }
-
-      return response.data;
-    } catch (error) {
-      console.error('发送AI消息失败:', error);
-      throw error;
-    }
+    const response = await this.request('/api/ai/analyze', {
+      method: 'POST',
+      body: JSON.stringify({ query: text }),
+    });
+    return response.data;
   }
 
-  /**
-   * 获取市场情绪分析
-   * @param {string} symbol - 股票代码（可选）
-   * @returns {Promise} 情绪分析结果
-   */
+  async sendAIMessage(message) {
+    const text = String(message || '').trim();
+    if (!text) {
+      throw new Error('Message cannot be empty');
+    }
+
+    const response = await this.request('/api/ai/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: text }),
+    });
+    return response.data;
+  }
+
   async getMarketSentiment(symbol = null, options = {}) {
-    const forceRefresh = Boolean(options?.forceRefresh);
-    const newsLimit = options?.newsLimit ?? 20;
-    const keyword = options?.keyword ?? '';
-    const sources = Array.isArray(options?.sources) ? options.sources : ['sina', 'akshare'];
-    const cacheKey = this.getCacheKey('/api/sentiment/market', { symbol, newsLimit, keyword, sources });
+    const params = {
+      symbol,
+      news_limit: options.newsLimit ?? 20,
+      keyword: options.keyword ?? '',
+      sources: Array.isArray(options.sources) ? options.sources : ['sina', 'akshare'],
+    };
+    const forceRefresh = Boolean(options.forceRefresh);
+    const cacheKey = this.getCacheKey('/api/sentiment/market', params);
     const cached = this.getCachedData(cacheKey);
-    
     if (cached && !forceRefresh) {
       return cached;
     }
 
-    try {
-      const params = new URLSearchParams();
-      if (symbol) {
-        params.append('symbol', String(symbol));
-      }
-      params.append('news_limit', String(newsLimit));
-      if (keyword && String(keyword).trim()) {
-        params.append('keyword', String(keyword).trim());
-      }
-      if (sources.length > 0) {
-        params.append('sources', sources.join(','));
-      }
-      const endpoint = `/api/sentiment/market?${params.toString()}`;
-      const response = await this.request(endpoint, {
-        method: 'GET'
-      });
-
-      if (!response?.success || !response?.data) {
-        throw new Error(response?.message || '获取市场情绪失败');
-      }
-
-      this.setCachedData(cacheKey, response.data);
-      return response.data;
-    } catch (error) {
-      console.error('获取市场情绪失败:', error);
-      throw error;
-    }
+    const response = await this.request('/api/sentiment/market', {
+      method: 'GET',
+      params,
+    });
+    this.setCachedData(cacheKey, response.data || null);
+    return response.data || null;
   }
 
-  /**
-   * 获取系统健康状态
-   * @returns {Promise} 系统状态
-   */
   async getHealthStatus() {
-    try {
-      const response = await this.request('/health');
-      return response;
-    } catch (error) {
-      console.error('获取系统状态失败:', error);
-      throw error;
-    }
+    return this.request('/health');
   }
 
-  /**
-   * 批量获取股票数据
-   * @param {array} symbols - 股票代码数组
-   * @returns {Promise} 股票数据数组
-   */
-  async batchGetStocks(symbols) {
+  async batchGetStocks(symbols = []) {
     if (!Array.isArray(symbols) || symbols.length === 0) {
       return [];
     }
 
-    try {
-      const promises = symbols.map(symbol => 
-        this.getStockDetail(symbol).catch(error => {
-          console.error(`获取股票 ${symbol} 详情失败:`, error);
-          return null;
-        })
-      );
-
-      const results = await Promise.all(promises);
-      return results.filter(stock => stock !== null);
-    } catch (error) {
-      console.error('批量获取股票数据失败:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * 获取股票历史数据
-   * @param {string} symbol - 股票代码
-   * @param {object} options - 查询选项
-   * @returns {Promise} 历史数据
-   */
-  async getStockHistory(symbol, options = {}) {
-    if (!symbol) {
-      throw new Error('股票代码不能为空');
-    }
-
-    const cacheKey = this.getCacheKey(`/api/stocks/${symbol}/history`, options);
-    const cached = this.getCachedData(cacheKey);
-    
-    if (cached) {
-      return cached;
-    }
-
-    try {
-      const response = await this.request(`/api/stocks/${symbol}/history`, {
-        method: 'POST',
-        body: JSON.stringify(options)
-      });
-
-      this.setCachedData(cacheKey, response.data);
-      return response.data;
-    } catch (error) {
-      console.error('获取股票历史数据失败:', error);
-      throw error;
-    }
+    const results = await Promise.all(
+      symbols.map((symbol) =>
+        this.getStockDetail(symbol).catch(() => null)
+      )
+    );
+    return results.filter(Boolean);
   }
 }
 
-// 创建单例实例
 const stockApiService = new StockApiService();
 
 export default stockApiService;

@@ -96,6 +96,18 @@ class LoginRequest(BaseModel):
         return value
 
 
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str = Field(..., min_length=1, max_length=255)
+
+    @field_validator("refresh_token")
+    @classmethod
+    def strip_refresh_token(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("refresh token cannot be empty")
+        return value
+
+
 class UserSettingsRequest(BaseModel):
     settings: dict[str, Any] = Field(default_factory=dict)
 
@@ -114,6 +126,17 @@ def success_response(data: Any, message: Optional[str] = None) -> dict[str, Any]
 
 def error_response(message: str, data: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     return {"success": False, "data": data or {}, "message": message}
+
+
+def _normalize_validation_errors(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    for error in errors:
+        item = dict(error)
+        ctx = item.get("ctx")
+        if isinstance(ctx, dict):
+            item["ctx"] = {key: str(value) for key, value in ctx.items()}
+        normalized.append(item)
+    return normalized
 
 
 def _extract_stock_list(stocks_response: Any) -> list[dict[str, Any]]:
@@ -274,7 +297,10 @@ async def handle_service_error(_, exc: ServiceError) -> JSONResponse:
 async def handle_validation_error(_, exc: RequestValidationError) -> JSONResponse:
     return JSONResponse(
         status_code=422,
-        content=error_response("Request validation failed", {"details": exc.errors()}),
+        content=error_response(
+            "Request validation failed",
+            {"details": _normalize_validation_errors(exc.errors())},
+        ),
     )
 
 
@@ -522,6 +548,31 @@ async def auth_login(request: LoginRequest):
             timeout=15.0,
         )
         return success_response(payload, "登录成功")
+    except Exception as exc:
+        return error_response(str(exc))
+
+
+@app.post("/api/auth/refresh")
+async def auth_refresh(request: RefreshTokenRequest):
+    try:
+        payload = await _run_blocking(
+            auth_service.refresh_session,
+            request.refresh_token,
+            timeout=15.0,
+        )
+        return success_response(payload, "Session refreshed")
+    except Exception as exc:
+        return error_response(str(exc))
+
+
+@app.post("/api/auth/logout")
+async def auth_logout(authorization: Optional[str] = Header(default=None)):
+    try:
+        token = _extract_bearer_token(authorization)
+        await _run_blocking(auth_service.logout, token, timeout=10.0)
+        return success_response({}, "Logged out")
+    except ServiceError:
+        raise
     except Exception as exc:
         return error_response(str(exc))
 

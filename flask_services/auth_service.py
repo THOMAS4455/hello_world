@@ -1,5 +1,5 @@
 """
-Lightweight auth service for register/login/profile/settings.
+File-backed auth service for register/login/profile/settings.
 """
 
 from __future__ import annotations
@@ -18,33 +18,65 @@ from typing import Any, Dict, Optional
 
 class AuthService:
     def __init__(self) -> None:
-        self._lock = threading.Lock()
-        self._users_file = Path(__file__).parent.parent / "data" / "users.json"
-        self._users_file.parent.mkdir(parents=True, exist_ok=True)
-        self._sessions: Dict[str, Dict[str, Any]] = {}
-        self._refresh_index: Dict[str, str] = {}
+        self._lock = threading.RLock()
+        data_dir = Path(__file__).parent.parent / "data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        self._users_file = data_dir / "users.json"
+        self._sessions_file = data_dir / "sessions.json"
         self._session_ttl = 24 * 3600
         self._refresh_ttl = 7 * 24 * 3600
         raw_admins = os.getenv("ADMIN_USERNAMES", "admin")
         self._admin_usernames = {name.strip().lower() for name in raw_admins.split(",") if name.strip()}
+        self._sessions: Dict[str, Dict[str, Any]] = {}
+        self._refresh_index: Dict[str, str] = {}
+        self._load_sessions()
+
+    def _default_users_payload(self) -> Dict[str, Any]:
+        return {"users": [], "next_id": 1}
 
     def _load_users(self) -> Dict[str, Any]:
         if not self._users_file.exists():
-            return {"users": [], "next_id": 1}
+            return self._default_users_payload()
         try:
             payload = json.loads(self._users_file.read_text(encoding="utf-8"))
             if not isinstance(payload, dict):
-                return {"users": [], "next_id": 1}
+                return self._default_users_payload()
             users = payload.get("users")
             next_id = payload.get("next_id")
             if not isinstance(users, list) or not isinstance(next_id, int):
-                return {"users": [], "next_id": 1}
+                return self._default_users_payload()
             return payload
         except Exception:
-            return {"users": [], "next_id": 1}
+            return self._default_users_payload()
 
     def _save_users(self, payload: Dict[str, Any]) -> None:
         self._users_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def _load_sessions(self) -> None:
+        if not self._sessions_file.exists():
+            self._sessions = {}
+            self._refresh_index = {}
+            return
+
+        try:
+            payload = json.loads(self._sessions_file.read_text(encoding="utf-8"))
+        except Exception:
+            payload = {}
+
+        sessions = payload.get("sessions", {}) if isinstance(payload, dict) else {}
+        refresh_index = payload.get("refresh_index", {}) if isinstance(payload, dict) else {}
+
+        self._sessions = sessions if isinstance(sessions, dict) else {}
+        self._refresh_index = refresh_index if isinstance(refresh_index, dict) else {}
+        self._prune_expired_sessions(persist=False)
+
+    def _save_sessions(self) -> None:
+        payload = {
+            "sessions": self._sessions,
+            "refresh_index": self._refresh_index,
+            "updated_at": datetime.now().isoformat(),
+        }
+        self._sessions_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     @staticmethod
     def _norm(value: str) -> str:
@@ -60,27 +92,85 @@ class AuthService:
         )
         return digest.hex()
 
+    def _resolve_roles(self, row: Dict[str, Any]) -> list[str]:
+        roles = row.get("roles")
+        if isinstance(roles, list) and roles:
+            normalized = sorted({str(role).strip().lower() for role in roles if str(role).strip()})
+            if normalized:
+                return normalized
+
+        username = str(row.get("username", "")).strip().lower()
+        return ["admin"] if username in self._admin_usernames else ["user"]
+
+    def _permissions_for_roles(self, roles: list[str]) -> list[str]:
+        permissions = {"read:market", "read:prediction", "write:profile"}
+        if "admin" in roles:
+            permissions.update({"read:admin", "write:admin", "read:system", "write:system"})
+        return sorted(permissions)
+
     def _public_user(self, row: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "id": row["id"],
             "username": row["username"],
             "email": row["email"],
             "created_at": row.get("created_at"),
-            "roles": row.get("roles", ["user"]),
+            "roles": self._resolve_roles(row),
             "profile": row.get("profile", {}),
             "settings": row.get("settings", {}),
         }
 
-    def _prune_expired_sessions(self) -> None:
-        now = time.time()
-        expired = [
-            token for token, session in self._sessions.items() if now > float(session.get("expires_ts", 0))
-        ]
-        for token in expired:
-            refresh_token = self._sessions.get(token, {}).get("refresh_token")
-            self._sessions.pop(token, None)
+    def _remove_session(self, token: str) -> None:
+        session = self._sessions.pop(token, None)
+        if session:
+            refresh_token = session.get("refresh_token")
             if refresh_token:
                 self._refresh_index.pop(refresh_token, None)
+
+    def _prune_expired_sessions(self, persist: bool = True) -> None:
+        now = time.time()
+        expired = []
+        for token, session in self._sessions.items():
+            if now > float(session.get("refresh_expires_ts", 0)):
+                expired.append(token)
+                continue
+            if now > float(session.get("expires_ts", 0)) and not session.get("refresh_token"):
+                expired.append(token)
+
+        for token in expired:
+            self._remove_session(token)
+
+        if persist and expired:
+            self._save_sessions()
+
+    def _issue_session(self, user: Dict[str, Any], *, previous_token: Optional[str] = None) -> Dict[str, Any]:
+        if previous_token:
+            self._remove_session(previous_token)
+
+        now = time.time()
+        token = secrets.token_urlsafe(32)
+        refresh_token = secrets.token_urlsafe(40)
+        expires_at = datetime.fromtimestamp(now + self._session_ttl).isoformat()
+        refresh_expires_at = datetime.fromtimestamp(now + self._refresh_ttl).isoformat()
+
+        self._sessions[token] = {
+            "user_id": int(user["id"]),
+            "expires_ts": now + self._session_ttl,
+            "refresh_token": refresh_token,
+            "refresh_expires_ts": now + self._refresh_ttl,
+        }
+        self._refresh_index[refresh_token] = token
+        self._save_sessions()
+
+        roles = self._resolve_roles(user)
+        return {
+            "user": self._public_user(user),
+            "token": token,
+            "refreshToken": refresh_token,
+            "expiresAt": expires_at,
+            "refreshExpiresAt": refresh_expires_at,
+            "roles": roles,
+            "permissions": self._permissions_for_roles(roles),
+        }
 
     def register(self, username: str, email: str, password: str) -> Dict[str, Any]:
         username = self._norm(username)
@@ -88,28 +178,27 @@ class AuthService:
         password = str(password or "")
 
         if len(username) < 3:
-            raise Exception("用户名至少 3 个字符")
+            raise Exception("Username must be at least 3 characters long")
         if "@" not in email or "." not in email:
-            raise Exception("邮箱格式不正确")
+            raise Exception("Email address is invalid")
         if len(password) < 6:
-            raise Exception("密码至少 6 位")
+            raise Exception("Password must be at least 6 characters long")
 
         with self._lock:
             payload = self._load_users()
             users = payload["users"]
             if any(str(user.get("username", "")).lower() == username.lower() for user in users):
-                raise Exception("用户名已存在")
+                raise Exception("Username already exists")
             if any(str(user.get("email", "")).lower() == email for user in users):
-                raise Exception("邮箱已被注册")
+                raise Exception("Email address is already registered")
 
             salt = secrets.token_hex(16)
-            password_hash = self._hash_password(password, salt)
             user = {
                 "id": payload["next_id"],
                 "username": username,
                 "email": email,
                 "password_salt": salt,
-                "password_hash": password_hash,
+                "password_hash": self._hash_password(password, salt),
                 "created_at": datetime.now().isoformat(),
                 "roles": ["admin"] if username.lower() in self._admin_usernames else ["user"],
                 "profile": {"phone": "", "company": "", "bio": ""},
@@ -133,42 +222,59 @@ class AuthService:
         username = self._norm(username)
         password = str(password or "")
         if not username or not password:
-            raise Exception("用户名和密码不能为空")
+            raise Exception("Username and password are required")
 
         with self._lock:
             self._prune_expired_sessions()
             payload = self._load_users()
             user = self._find_user(payload["users"], username)
             if user is None:
-                raise Exception("用户不存在")
+                raise Exception("User does not exist")
 
             candidate_hash = self._hash_password(password, str(user["password_salt"]))
             if not hmac.compare_digest(candidate_hash, str(user["password_hash"])):
-                raise Exception("用户名或密码错误")
+                raise Exception("Username or password is incorrect")
 
-            now = time.time()
-            token = secrets.token_urlsafe(32)
-            refresh_token = secrets.token_urlsafe(40)
-            expires_at = datetime.fromtimestamp(now + self._session_ttl).isoformat()
-            refresh_expires_at = datetime.fromtimestamp(now + self._refresh_ttl).isoformat()
+            return self._issue_session(user)
 
-            self._sessions[token] = {
-                "user_id": user["id"],
-                "expires_ts": now + self._session_ttl,
-                "refresh_token": refresh_token,
-                "refresh_expires_ts": now + self._refresh_ttl,
-            }
-            self._refresh_index[refresh_token] = token
+    def refresh_session(self, refresh_token: str) -> Dict[str, Any]:
+        refresh_token = self._norm(refresh_token)
+        if not refresh_token:
+            raise Exception("Refresh token is required")
 
-            return {
-                "user": self._public_user(user),
-                "token": token,
-                "refreshToken": refresh_token,
-                "expiresAt": expires_at,
-                "refreshExpiresAt": refresh_expires_at,
-                "roles": user.get("roles", ["user"]),
-                "permissions": ["read:market", "read:prediction", "write:profile"],
-            }
+        with self._lock:
+            self._prune_expired_sessions()
+            current_token = self._refresh_index.get(refresh_token)
+            if not current_token:
+                raise Exception("Refresh token is invalid")
+
+            session = self._sessions.get(current_token)
+            if not session:
+                self._refresh_index.pop(refresh_token, None)
+                self._save_sessions()
+                raise Exception("Session is no longer available")
+
+            if time.time() > float(session.get("refresh_expires_ts", 0)):
+                self._remove_session(current_token)
+                self._save_sessions()
+                raise Exception("Refresh token has expired")
+
+            user = self._get_user_by_id(int(session["user_id"]))
+            if user is None:
+                self._remove_session(current_token)
+                self._save_sessions()
+                raise Exception("User does not exist")
+
+            return self._issue_session(user, previous_token=current_token)
+
+    def logout(self, token: str) -> None:
+        token = self._norm(token)
+        if not token:
+            raise Exception("Access token is required")
+
+        with self._lock:
+            self._remove_session(token)
+            self._save_sessions()
 
     def _get_user_by_id(self, user_id: int) -> Optional[Dict[str, Any]]:
         payload = self._load_users()
@@ -180,27 +286,28 @@ class AuthService:
     def validate_token(self, token: str) -> Dict[str, Any]:
         token = self._norm(token)
         if not token:
-            raise Exception("缺少访问令牌")
-        session = self._sessions.get(token)
-        if not session:
-            raise Exception("登录状态无效，请重新登录")
-        if time.time() > float(session.get("expires_ts", 0)):
-            refresh_token = session.get("refresh_token")
-            self._sessions.pop(token, None)
-            if refresh_token:
-                self._refresh_index.pop(refresh_token, None)
-            raise Exception("登录已过期，请重新登录")
+            raise Exception("Access token is required")
 
-        user = self._get_user_by_id(int(session["user_id"]))
-        if user is None:
-            raise Exception("用户不存在")
-        return self._public_user(user)
+        with self._lock:
+            self._prune_expired_sessions()
+            session = self._sessions.get(token)
+            if not session:
+                raise Exception("Login session is invalid")
+            if time.time() > float(session.get("expires_ts", 0)):
+                raise Exception("Login session has expired")
+
+            user = self._get_user_by_id(int(session["user_id"]))
+            if user is None:
+                self._remove_session(token)
+                self._save_sessions()
+                raise Exception("User does not exist")
+            return self._public_user(user)
 
     def _ensure_admin(self, token: str) -> Dict[str, Any]:
         user = self.validate_token(token)
         roles = [str(role).lower() for role in (user.get("roles") or [])]
         if "admin" not in roles:
-            raise Exception("需要管理员权限")
+            raise Exception("Administrator privileges are required")
         return user
 
     def verify_admin(self, token: str) -> Dict[str, Any]:
@@ -238,7 +345,7 @@ class AuthService:
     def update_user_settings(self, token: str, settings: Dict[str, Any]) -> Dict[str, Any]:
         user = self.validate_token(token)
         if not isinstance(settings, dict):
-            raise Exception("设置参数格式错误")
+            raise Exception("Settings payload must be an object")
 
         with self._lock:
             payload = self._load_users()
@@ -248,7 +355,7 @@ class AuthService:
                     target = row
                     break
             if target is None:
-                raise Exception("用户不存在")
+                raise Exception("User does not exist")
 
             existing = target.get("settings", {})
             if not isinstance(existing, dict):

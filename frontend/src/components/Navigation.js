@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { Badge, Button, Container, Nav, Navbar } from 'react-bootstrap';
 import { useDispatch, useSelector } from 'react-redux';
 import { useAppI18n } from '../i18n';
+import { useLogoutSessionMutation } from '../services/apiService';
 import PageLogo from './PageLogo';
 import { logout } from '../store/slices/authSlice';
 import '../styles/Navigation.css';
@@ -13,10 +14,16 @@ const Navigation = () => {
   const isAuthenticated = useSelector((state) => Boolean(state?.auth?.isAuthenticated));
   const username = useSelector((state) => state?.auth?.user?.username || '');
   const roles = useSelector((state) => state?.auth?.roles || []);
-  const isAdmin = Array.isArray(roles) && roles.some((r) => String(r).toLowerCase() === 'admin');
+  const isAdmin = Array.isArray(roles) && roles.some((role) => String(role).toLowerCase() === 'admin');
   const { t } = useAppI18n();
+  const [logoutSession] = useLogoutSessionMutation();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await logoutSession().unwrap();
+    } catch {
+      // Fall back to local logout even when the backend session is already unavailable.
+    }
     dispatch(logout());
     navigate('/login');
   };
@@ -25,10 +32,8 @@ const Navigation = () => {
     <Navbar expand="lg" fixed="top" className="main-navbar">
       <Container fluid="xl">
         <Navbar.Brand as={NavLink} to="/" className="brand-text">
-          <PageLogo title={t('appTitle')} glyph="A" tone="orange" compact />
-          <Badge bg="light" text="dark" className="ms-2">
-            BETA
-          </Badge>
+          <PageLogo title="AlphaScope" subtitle="Research Terminal" glyph="A" tone="orange" compact />
+          <Badge className="brand-beta">BETA</Badge>
         </Navbar.Brand>
         <Navbar.Toggle aria-controls="main-navbar-nav" />
         <Navbar.Collapse id="main-navbar-nav">
@@ -70,10 +75,8 @@ const Navigation = () => {
                     {t('navAdmin')}
                   </Nav.Link>
                 )}
-                <Nav.Link as={NavLink} to="/profile">
-                  {username ? `${t('navUserPrefix')}: ${username}` : t('navProfile')}
-                </Nav.Link>
-                <Button variant="outline-light" size="sm" onClick={handleLogout}>
+                <div className="nav-user">{username ? username : t('navProfile')}</div>
+                <Button variant="outline-light" size="sm" onClick={handleLogout} className="logout-btn">
                   {t('navLogout')}
                 </Button>
               </>

@@ -73,19 +73,13 @@ const Backtest = () => {
     setError(null);
     setResult(null);
     try {
-      const resp = await fetch(
-        `http://localhost:8000/api/predictions/backtest?symbol=${encodeURIComponent(
-          stock
-        )}&strategy=${encodeURIComponent(strategy)}&horizon=${encodeURIComponent(
-          horizon
-        )}&test_size=${encodeURIComponent(testSize)}&up_threshold=${encodeURIComponent(upThreshold)}`,
-        { method: 'POST' }
-      );
-      const data = await resp.json();
-      if (!resp.ok || !data.success) {
-        throw new Error(data.message || `request failed: ${resp.status}`);
-      }
-      setResult(data.data);
+      const data = await stockApiService.runBacktest(stock, {
+        strategy,
+        horizon,
+        testSize,
+        upThreshold,
+      });
+      setResult(data);
     } catch (e) {
       setError(`Backtest failed: ${e.message}`);
     } finally {

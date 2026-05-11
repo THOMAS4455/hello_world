@@ -67,14 +67,11 @@ const Predictions = () => {
     setError(null);
     setPrediction(null);
     try {
-      const resp = await fetch(
-        `http://localhost:8000/api/predictions/predict?symbol=${encodeURIComponent(selectedStock)}&horizon=${encodeURIComponent(horizon)}&up_threshold=${encodeURIComponent(upThreshold)}`
-      );
-      const data = await resp.json();
-      if (!resp.ok || !data.success) {
-        throw new Error(data.message || `${isEnglish ? 'Request failed' : '请求失败'}: ${resp.status}`);
-      }
-      setPrediction(data.data);
+      const data = await stockApiService.getStockPrediction(selectedStock, {
+        horizon,
+        upThreshold,
+      });
+      setPrediction(data);
     } catch (e) {
       setError(`${isEnglish ? 'Failed to generate prediction' : '生成预测失败'}: ${e.message}`);
     } finally {

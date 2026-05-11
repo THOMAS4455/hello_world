@@ -4,6 +4,7 @@ Prediction service for stock forecasting and backtesting.
 
 import sys
 import time
+import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
@@ -21,8 +22,10 @@ class PredictionService:
         self.cache: Dict[str, Dict[str, Any]] = {}
         self.cache_timeout = 3600
         self._trained_models: Dict[Tuple[str, int, float], float] = {}
+        self._history_cache: Dict[str, Dict[str, Any]] = {}
         self._sentiment_cache: Dict[str, Dict[str, Any]] = {}
         self.sentiment_cache_timeout = 1800
+        self._model_lock = threading.Lock()
         self.positive_words = {
             "上涨",
             "反弹",
@@ -141,41 +144,48 @@ class PredictionService:
         import akshare as ak
 
         code = self._normalize_symbol(symbol)
+        cached = self._history_cache.get(code)
+        if cached and (time.time() - cached.get("timestamp", 0) < self.cache_timeout):
+            return list(cached.get("data", []))
+
         end_date = datetime.now().strftime("%Y%m%d")
         start_date = (datetime.now() - timedelta(days=1200)).strftime("%Y%m%d")
 
+        records: List[Dict[str, Any]] = []
         try:
             history_data = self.collector.get_stock_history(code)
             if history_data:
-                return history_data
+                records = history_data
         except Exception:
             pass
 
-        for adjust in ("", "qfq"):
+        if not records:
+            for adjust in ("", "qfq"):
+                try:
+                    hist_df = ak.stock_zh_a_hist(
+                        symbol=code,
+                        period="daily",
+                        start_date=start_date,
+                        end_date=end_date,
+                        adjust=adjust,
+                    )
+                    records = self._history_df_to_records(code, hist_df)
+                    if records:
+                        break
+                except Exception:
+                    continue
+
+        if not records:
             try:
-                hist_df = ak.stock_zh_a_hist(
-                    symbol=code,
-                    period="daily",
-                    start_date=start_date,
-                    end_date=end_date,
-                    adjust=adjust,
-                )
-                records = self._history_df_to_records(code, hist_df)
-                if records:
-                    return records
+                market_symbol = self._to_market_symbol(code)
+                daily_df = ak.stock_zh_a_daily(symbol=market_symbol, adjust="")
+                records = self._history_df_to_records(code, daily_df.tail(1200))
             except Exception:
-                continue
+                records = []
 
-        try:
-            market_symbol = self._to_market_symbol(code)
-            daily_df = ak.stock_zh_a_daily(symbol=market_symbol, adjust="")
-            records = self._history_df_to_records(code, daily_df.tail(1200))
-            if records:
-                return records
-        except Exception:
-            pass
-
-        return []
+        if records:
+            self._history_cache[code] = {"timestamp": time.time(), "data": list(records)}
+        return records
 
     def _normalize_news_time(self, value: Any) -> str:
         text = str(value or "").strip()
@@ -425,8 +435,11 @@ class PredictionService:
 
         last_train = self._trained_models.get(key)
         if last_train is None or (time.time() - last_train) > self.cache_timeout:
-            self.predictor.train(df, horizon=horizon, up_threshold=up_threshold)
-            self._trained_models[key] = time.time()
+            with self._model_lock:
+                last_train = self._trained_models.get(key)
+                if last_train is None or (time.time() - last_train) > self.cache_timeout:
+                    self.predictor.train(df, horizon=horizon, up_threshold=up_threshold)
+                    self._trained_models[key] = time.time()
 
         return df
 
