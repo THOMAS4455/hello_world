@@ -30,9 +30,9 @@ const Home = () => {
           ]
         : [
             { title: '智能预测', desc: '在同一视图中查看方向、置信度和 AI 解释。', path: '/predictions' },
-            { title: '回测评估', desc: '用历史窗口快速验证策略信号质量。', path: '/backtest' },
-            { title: '市场情绪', desc: '快速观察新闻压力与市场宽度变化。', path: '/market-sentiment' },
-            { title: 'AI 研判', desc: '在下单前获得自然语言解释与提示。', path: '/ai-chat' },
+            { title: '回测评估', desc: '用历史窗口验证信号质量与策略稳定性。', path: '/backtest' },
+            { title: '市场情绪', desc: '快速观察新闻压力与市场广度的变化。', path: '/market-sentiment' },
+            { title: 'AI 研判', desc: '下单前先获取自然语言解释和风险提示。', path: '/ai-chat' },
           ],
     [isEnglish]
   );
@@ -49,7 +49,7 @@ const Home = () => {
   const fetchNews = useCallback(
     async (force = false) => {
       if (activeSources.length === 0) {
-        setError(isEnglish ? 'Select at least one news source.' : '至少选择一个新闻来源。');
+        setError(isEnglish ? 'Select at least one news source.' : '请至少选择一个新闻来源。');
         return;
       }
 
@@ -92,13 +92,13 @@ const Home = () => {
     <div className="analysis-page home-page">
       <section className="home-hero mb-4">
         <div className="home-hero-main">
-          <PageLogo title="AlphaScope Live" subtitle="Market intelligence workspace" glyph="S" tone="orange" />
-          <Badge>Quant x AI</Badge>
-          <h1>{isEnglish ? 'A cleaner pre-trade research desk.' : '面向交易前决策的投研工作台。'}</h1>
+          <PageLogo title="AlphaScope Live" subtitle="Market intelligence workspace" glyph="S" tone="blue" />
+          <Badge>Market Research Desk</Badge>
+          <h1>{isEnglish ? 'A focused workspace for pre-trade research.' : '面向交易前研究的专注工作台。'}</h1>
           <p>
             {isEnglish
-              ? 'Monitor realtime financial headlines, move into prediction and backtest views, and keep the workflow focused on decision-making instead of page chrome.'
-              : '在一个界面里查看实时财经新闻、进入预测与回测模块，并把注意力放在决策本身，而不是分散的页面装饰上。'}
+              ? 'Track realtime financial headlines, move into forecasts and backtests, and keep attention on the decision instead of the interface.'
+              : '在一个界面里查看实时财经新闻，进入预测与回测模块，并把注意力放在决策本身，而不是分散的页面装饰上。'}
           </p>
           <div className="home-hero-actions">
             <Button onClick={() => navigate('/dashboard')}>
@@ -116,7 +116,7 @@ const Home = () => {
             <strong>{newsItems.length}</strong>
           </div>
           <div className="hero-stat">
-            <span>{isEnglish ? 'Live Sources' : '数据来源'}</span>
+            <span>{isEnglish ? 'Live Sources' : '实时来源'}</span>
             <strong>{sourceText || '-'}</strong>
           </div>
           <div className="hero-stat">
@@ -146,7 +146,7 @@ const Home = () => {
             <p className="home-section-subtitle">
               {isEnglish
                 ? 'Prioritize finance headlines with real source links. Sina is enabled by default because it usually returns better article URLs.'
-                : '优先抓取带真实来源链接的财经新闻。默认启用新浪，因为它通常能返回更可靠的原文地址。'}
+                : '优先抓取带真实来源链接的财经新闻。默认启用新浪，因为它通常能返回更稳定的原文地址。'}
             </p>
           </div>
 
@@ -205,7 +205,7 @@ const Home = () => {
               <p className="home-section-subtitle">
                 {isEnglish
                   ? 'Only real fetched headlines are shown. Items without original URLs are displayed as plain text.'
-                  : '这里展示的都是真实抓取结果。没有原文链接的条目会按纯文本展示，不再伪装成可点击新闻。'}
+                  : '这里展示的都是真实抓取结果。没有原文链接的条目会按纯文本显示，不再伪装成可点击新闻。'}
               </p>
             </div>
             <Badge>

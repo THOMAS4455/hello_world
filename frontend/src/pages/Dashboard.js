@@ -203,12 +203,12 @@ const Dashboard = () => {
       <div className="dashboard-hero mb-4">
         <div>
           <PageLogo title="Market Console" subtitle="Realtime Watchboard" glyph="D" tone="blue" />
-          <div className="hero-tag mb-2">{isEnglish ? 'Realtime Market Cockpit' : '实时市场驾驶舱'}</div>
+          <div className="hero-tag mb-2">{isEnglish ? 'Realtime Market Console' : '实时市场控制台'}</div>
           <h1 className="mb-2">{isEnglish ? 'Market Overview' : '市场总览'}</h1>
-          <p className="mb-0 text-secondary">
+          <p className="mb-0">
             {isEnglish
               ? 'Search, filter, sort, and jump into details from one screen to keep your analysis loop tight.'
-              : '一页完成检索、趋势筛选、排序和快捷跳转，让分析路径更短，交互更直接。'}
+              : '在一个页面完成检索、趋势筛选、排序和详情跳转，让分析路径更短，交互更直接。'}
           </p>
         </div>
         <div className="dashboard-hero-actions">

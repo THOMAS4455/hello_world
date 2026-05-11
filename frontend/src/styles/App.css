@@ -3,19 +3,30 @@
 }
 
 :root {
-  --bg-main: #0b1220;
-  --bg-panel: #111b2e;
-  --bg-panel-soft: #16253d;
-  --bg-surface: #f4f7fb;
-  --text-main: #dfe8f3;
-  --text-soft: #8ea2ba;
-  --text-dark: #162235;
-  --card-border: #d9e3ef;
+  --shell: #06090f;
+  --shell-soft: #0f172a;
+  --shell-elevated: #111827;
+  --bg-main: #f3f6fb;
+  --bg-panel: #ffffff;
+  --bg-panel-soft: #f8fafc;
+  --bg-surface: #ffffff;
+  --text-main: #f8fafc;
+  --text-soft: #94a3b8;
+  --text-dark: #0f172a;
+  --text-muted: #475569;
+  --text-subtle: #64748b;
+  --card-border: #dbe3ee;
+  --card-border-strong: #cbd5e1;
   --card-bg: #ffffff;
-  --primary: #f59e0b;
-  --primary-hover: #d88807;
-  --accent: #14b8a6;
-  --accent-soft: #dff8f4;
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --primary-soft: #dbeafe;
+  --accent: #22c55e;
+  --accent-soft: #dcfce7;
+  --danger: #dc2626;
+  --danger-soft: #fee2e2;
+  --shadow-soft: 0 14px 32px rgba(15, 23, 42, 0.06);
+  --shadow-strong: 0 18px 42px rgba(2, 8, 23, 0.22);
 }
 
 html,
@@ -29,10 +40,7 @@ body {
   font-family: 'Inter', 'Plus Jakarta Sans', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background:
-    radial-gradient(circle at top left, rgba(20, 184, 166, 0.08), transparent 24%),
-    radial-gradient(circle at top right, rgba(245, 158, 11, 0.08), transparent 20%),
-    linear-gradient(180deg, #0b1220 0, #0f1728 220px, #eef3f8 220px, #f4f7fb 100%);
+  background: linear-gradient(180deg, #06090f 0, #0f172a 240px, #f3f6fb 240px, #f3f6fb 100%);
   color: var(--text-dark);
 }
 
@@ -44,8 +52,8 @@ body {
 
 .main-content {
   flex: 1;
-  margin-top: 72px;
-  padding: 24px;
+  margin-top: 76px;
+  padding: 28px 24px 40px;
   animation: page-fade-in 0.35s ease;
 }
 
@@ -61,28 +69,29 @@ body {
 .card {
   border: 1px solid var(--card-border);
   background: var(--card-bg);
-  border-radius: 8px;
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+  border-radius: 16px;
+  box-shadow: var(--shadow-soft);
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .card:hover {
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08);
 }
 
 .btn {
-  border-radius: 8px;
+  border-radius: 12px;
   font-weight: 600;
   transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
 .btn:hover {
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
 }
 
 .btn-primary {
   background: var(--primary);
   border-color: var(--primary);
+  color: #ffffff;
 }
 
 .btn-primary:hover {
@@ -91,15 +100,15 @@ body {
 }
 
 .btn-outline-primary {
-  border-color: #27466f;
-  color: #d8e3f2;
-  background: transparent;
+  border-color: #93c5fd;
+  color: var(--primary);
+  background: #ffffff;
 }
 
 .btn-outline-primary:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: #5376a3;
-  color: #ffffff;
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: #1d4ed8;
 }
 
 .table {
@@ -111,7 +120,7 @@ body {
   font-size: 12px;
   letter-spacing: 0;
   text-transform: uppercase;
-  color: #60738a;
+  color: var(--text-subtle);
 }
 
 .analysis-page {
@@ -121,20 +130,34 @@ body {
 
 .form-control,
 .form-select {
-  border-radius: 8px;
-  border-color: #d5e0ea;
+  border-radius: 12px;
+  border-color: var(--card-border);
   min-height: 44px;
+  color: var(--text-dark);
+  background: #ffffff;
 }
 
 .form-control:focus,
 .form-select:focus {
-  border-color: #7ea0c8;
-  box-shadow: 0 0 0 0.2rem rgba(65, 118, 190, 0.14);
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.12);
 }
 
 .badge {
   border-radius: 999px;
   font-weight: 600;
+}
+
+.text-success {
+  color: #15803d !important;
+}
+
+.text-danger {
+  color: var(--danger) !important;
+}
+
+.text-muted {
+  color: var(--text-subtle) !important;
 }
 
 @keyframes page-fade-in {
@@ -150,8 +173,8 @@ body {
 
 @media (max-width: 768px) {
   .main-content {
-    margin-top: 66px;
-    padding: 14px;
+    margin-top: 70px;
+    padding: 16px 14px 28px;
   }
 
   .main-content.auth-route {

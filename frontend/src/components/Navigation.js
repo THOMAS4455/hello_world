@@ -32,7 +32,7 @@ const Navigation = () => {
     <Navbar expand="lg" fixed="top" className="main-navbar">
       <Container fluid="xl">
         <Navbar.Brand as={NavLink} to="/" className="brand-text">
-          <PageLogo title="AlphaScope" subtitle="Research Terminal" glyph="A" tone="orange" compact />
+          <PageLogo title="AlphaScope" subtitle="Research Workspace" glyph="A" tone="blue" compact />
           <Badge className="brand-beta">BETA</Badge>
         </Navbar.Brand>
         <Navbar.Toggle aria-controls="main-navbar-nav" />
