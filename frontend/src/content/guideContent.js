@@ -183,6 +183,10 @@ export const guideContent = {
           q: '数据从哪来？',
           a: '行情主要来自东财 push 接口 + 新浪/腾讯直连验证；新闻来自新浪滚动与 AKShare 全球财经；历史 K 线来自 AKShare。',
         },
+        {
+          q: '情绪/广度历史不足怎么办？',
+          a: '管理员可在「管理后台 → 特征历史回填」批量写入：情绪来自近期新闻按日聚合；广度在无法拉全市场历史涨跌家数时，用上证指数日涨跌作有界代理（index_proxy），仅供研究回放。',
+        },
       ],
     },
   },
@@ -369,6 +373,10 @@ export const guideContent = {
         {
           q: 'Where does data come from?',
           a: 'Quotes: Eastmoney push + Sina/Tencent verification. News: Sina roll + AKShare. History: AKShare daily bars.',
+        },
+        {
+          q: 'Sparse sentiment/breadth history?',
+          a: 'Admins can run Admin Panel → Feature history backfill: sentiment from recent news by day; breadth uses a bounded Shanghai index daily-return proxy (index_proxy) when full-market advance/decline history is unavailable.',
         },
       ],
     },

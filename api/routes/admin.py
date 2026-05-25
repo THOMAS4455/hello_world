@@ -5,8 +5,9 @@ from typing import Optional
 from fastapi import APIRouter, Header
 
 from api.common import ServiceError, error_response, extract_bearer_token, run_blocking, success_response
-from api.schemas import AdminSystemConfigUpdateRequest
+from api.schemas import AdminSystemConfigUpdateRequest, FeatureHistoryBackfillRequest
 from api.services import ai_service, auth_service, data_service, system_settings_service
+from flask_services.feature_history_backfill import feature_history_backfill_service
 
 router = APIRouter(tags=["admin"])
 
@@ -86,6 +87,43 @@ async def admin_update_system_config(
             },
             "系统配置更新成功",
         )
+    except ServiceError:
+        raise
+    except Exception as exc:
+        return error_response(str(exc))
+
+
+@router.get("/api/admin/feature-history/status")
+async def admin_feature_history_status(authorization: Optional[str] = Header(default=None)):
+    try:
+        token = extract_bearer_token(authorization)
+        await run_blocking(auth_service.verify_admin, token, timeout=10.0)
+        payload = await run_blocking(feature_history_backfill_service.get_status, timeout=10.0)
+        return success_response(payload)
+    except ServiceError:
+        raise
+    except Exception as exc:
+        return error_response(str(exc))
+
+
+@router.post("/api/admin/feature-history/backfill")
+async def admin_feature_history_backfill(
+    request: FeatureHistoryBackfillRequest,
+    authorization: Optional[str] = Header(default=None),
+):
+    try:
+        token = extract_bearer_token(authorization)
+        await run_blocking(auth_service.verify_admin, token, timeout=10.0)
+        payload = await run_blocking(
+            feature_history_backfill_service.run,
+            days=request.days,
+            news_limit=request.news_limit,
+            fill_sentiment=request.fill_sentiment,
+            fill_breadth=request.fill_breadth,
+            overwrite=request.overwrite,
+            timeout=300.0,
+        )
+        return success_response(payload, "特征历史回填完成")
     except ServiceError:
         raise
     except Exception as exc:

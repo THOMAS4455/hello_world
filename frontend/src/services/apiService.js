@@ -199,6 +199,18 @@ export const apiService = createApi({
       }),
       invalidatesTags: ['System'],
     }),
+    getAdminFeatureHistoryStatus: builder.query({
+      query: () => '/api/admin/feature-history/status',
+      providesTags: ['System'],
+    }),
+    backfillAdminFeatureHistory: builder.mutation({
+      query: (payload) => ({
+        url: '/api/admin/feature-history/backfill',
+        method: 'POST',
+        body: payload,
+      }),
+      invalidatesTags: ['System'],
+    }),
   }),
 });
 
@@ -229,6 +241,8 @@ export const {
   useGetAdminDatabaseInfoQuery,
   useGetAdminSystemConfigQuery,
   useUpdateAdminSystemConfigMutation,
+  useGetAdminFeatureHistoryStatusQuery,
+  useBackfillAdminFeatureHistoryMutation,
 } = apiService;
 
 export default apiService;

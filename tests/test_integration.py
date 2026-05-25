@@ -340,6 +340,84 @@ class TestIntegration:
         assert backtest_run_response.json()["success"] is True
         assert backtest_run_response.json()["data"]["item"]["result"]["strategy"] == "default"
 
+    def test_admin_feature_history_endpoints(self, client, isolated_auth_storage, monkeypatch):
+        monkeypatch.setattr(
+            "api.routes.admin.feature_history_backfill_service.get_status",
+            lambda: {
+                "breadth_days": 2,
+                "sentiment_days": 1,
+                "breadth_range": {"start": "2024-01-01", "end": "2024-01-02"},
+                "sentiment_range": {"start": "2024-01-01", "end": "2024-01-01"},
+                "data_dir": "/tmp/feature_history",
+            },
+        )
+        monkeypatch.setattr(
+            "api.routes.admin.feature_history_backfill_service.run",
+            lambda **kwargs: {
+                "requested_days": kwargs.get("days", 90),
+                "cutoff_date": "2024-01-01",
+                "overwrite": kwargs.get("overwrite", False),
+                "sentiment": {"enabled": True, "written": 1, "skipped": 0, "days": 1},
+                "breadth": {"enabled": True, "written": 2, "skipped": 0, "days": 2, "source": "index_proxy"},
+                "errors": [],
+                "status": {"breadth_days": 2, "sentiment_days": 1},
+            },
+        )
+
+        register_response = client.post(
+            "/api/auth/register",
+            json={"username": "admin", "email": "admin-feature@test.com", "password": "secret123"},
+        )
+        assert register_response.status_code == 200
+
+        login_response = client.post(
+            "/api/auth/login",
+            json={"username": "admin", "password": "secret123"},
+        )
+        assert login_response.status_code == 200
+        token = login_response.json()["data"]["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        status_response = client.get("/api/admin/feature-history/status", headers=headers)
+        assert status_response.status_code == 200
+        assert status_response.json()["success"] is True
+        assert status_response.json()["data"]["breadth_days"] == 2
+
+        backfill_response = client.post(
+            "/api/admin/feature-history/backfill",
+            headers=headers,
+            json={
+                "days": 30,
+                "news_limit": 120,
+                "fill_sentiment": True,
+                "fill_breadth": True,
+                "overwrite": False,
+            },
+        )
+        assert backfill_response.status_code == 200
+        assert backfill_response.json()["success"] is True
+        assert backfill_response.json()["data"]["breadth"]["written"] == 2
+
+        unauth_response = client.get("/api/admin/feature-history/status")
+        assert unauth_response.status_code == 401
+
+        client.post(
+            "/api/auth/register",
+            json={"username": "viewer99", "email": "viewer99@test.com", "password": "secret123"},
+        )
+        user_login = client.post(
+            "/api/auth/login",
+            json={"username": "viewer99", "password": "secret123"},
+        )
+        user_headers = {"Authorization": f"Bearer {user_login.json()['data']['token']}"}
+        profile_response = client.get("/api/user/profile", headers=user_headers)
+        assert profile_response.status_code == 200
+        assert "admin" not in (profile_response.json()["data"]["user"].get("roles") or [])
+
+        forbidden_response = client.get("/api/admin/feature-history/status", headers=user_headers)
+        assert forbidden_response.status_code == 403
+        assert forbidden_response.json()["success"] is False
+
     def test_cors_headers(self, client):
         response = client.options(
             "/health",

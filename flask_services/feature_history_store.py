@@ -31,29 +31,49 @@ class FeatureHistoryStore:
     def _save_json_map(self, path: Path, payload: Dict[str, Any]) -> None:
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    def record_market_breadth(self, trading_date: str, breadth: float) -> None:
+    def record_market_breadth(
+        self,
+        trading_date: str,
+        breadth: float,
+        *,
+        source: str = "live",
+        overwrite: bool = True,
+    ) -> bool:
         day = str(trading_date or "").strip()[:10]
         if not day:
-            return
+            return False
         with self._lock:
             rows = self._load_json_map(self._breadth_file)
+            if day in rows and not overwrite:
+                return False
             rows[day] = {
                 "breadth": float(breadth),
+                "source": str(source or "live"),
                 "updated_at": datetime.now().isoformat(timespec="seconds"),
             }
             self._save_json_map(self._breadth_file, rows)
+        return True
 
-    def record_sentiment_daily(self, trading_date: str, metrics: Dict[str, float]) -> None:
+    def record_sentiment_daily(
+        self,
+        trading_date: str,
+        metrics: Dict[str, float],
+        *,
+        overwrite: bool = True,
+    ) -> bool:
         day = str(trading_date or "").strip()[:10]
         if not day:
-            return
+            return False
         with self._lock:
             rows = self._load_json_map(self._sentiment_file)
+            if day in rows and not overwrite:
+                return False
             rows[day] = {
                 **{k: float(v) for k, v in metrics.items()},
                 "updated_at": datetime.now().isoformat(timespec="seconds"),
             }
             self._save_json_map(self._sentiment_file, rows)
+        return True
 
     def get_breadth_map(self) -> Dict[str, float]:
         with self._lock:
@@ -94,6 +114,25 @@ class FeatureHistoryStore:
             prior = [d for d in dates if d < day]
             return prior[-1] if prior else None
         return dates[idx - 1] if idx > 0 else None
+
+    def get_status(self) -> Dict[str, Any]:
+        breadth_map = self.get_breadth_map()
+        sentiment_map = self.get_sentiment_map()
+        breadth_days = sorted(breadth_map.keys())
+        sentiment_days = sorted(sentiment_map.keys())
+        return {
+            "breadth_days": len(breadth_days),
+            "sentiment_days": len(sentiment_days),
+            "breadth_range": {
+                "start": breadth_days[0] if breadth_days else None,
+                "end": breadth_days[-1] if breadth_days else None,
+            },
+            "sentiment_range": {
+                "start": sentiment_days[0] if sentiment_days else None,
+                "end": sentiment_days[-1] if sentiment_days else None,
+            },
+            "data_dir": str(self._breadth_file.parent),
+        }
 
 
 feature_history_store = FeatureHistoryStore()

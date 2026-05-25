@@ -15,6 +15,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from api.common import ServiceError
+
 
 class AuthService:
     def __init__(self) -> None:
@@ -307,7 +309,7 @@ class AuthService:
         user = self.validate_token(token)
         roles = [str(role).lower() for role in (user.get("roles") or [])]
         if "admin" not in roles:
-            raise Exception("Administrator privileges are required")
+            raise ServiceError("Administrator privileges are required", 403)
         return user
 
     def verify_admin(self, token: str) -> Dict[str, Any]:

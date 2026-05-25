@@ -111,3 +111,11 @@ class BacktestRequest(BaseModel):
     @classmethod
     def strip_symbol(cls, value: str) -> str:
         return value.strip()
+
+
+class FeatureHistoryBackfillRequest(BaseModel):
+    days: int = Field(default=90, ge=7, le=365)
+    news_limit: int = Field(default=300, ge=50, le=500)
+    fill_sentiment: bool = True
+    fill_breadth: bool = True
+    overwrite: bool = False

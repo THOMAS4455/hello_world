@@ -18,6 +18,8 @@ import {
   useGetAdminSystemConfigQuery,
   useGetAdminUsersQuery,
   useUpdateAdminSystemConfigMutation,
+  useGetAdminFeatureHistoryStatusQuery,
+  useBackfillAdminFeatureHistoryMutation,
 } from '../services/apiService';
 import { setLanguage } from '../store/slices/uiSlice';
 import ServiceStatus from '../components/ServiceStatus';
@@ -40,6 +42,13 @@ const AdminPanel = () => {
     refetch: refetchCfg,
   } = useGetAdminSystemConfigQuery(undefined, { skip: !isAdmin });
   const [updateConfig, { isLoading: savingConfig }] = useUpdateAdminSystemConfigMutation();
+  const {
+    data: featureHistoryResp,
+    isLoading: featureHistoryLoading,
+    refetch: refetchFeatureHistory,
+  } = useGetAdminFeatureHistoryStatusQuery(undefined, { skip: !isAdmin });
+  const [backfillFeatureHistory, { isLoading: backfillingFeatureHistory }] =
+    useBackfillAdminFeatureHistoryMutation();
 
   const [aiForm, setAiForm] = useState({
     api_key: '',
@@ -54,6 +63,15 @@ const AdminPanel = () => {
   const [dataSourceForm, setDataSourceForm] = useState({ stock_source: 'aggregate_realtime' });
   const [saveMsg, setSaveMsg] = useState('');
   const [saveErr, setSaveErr] = useState('');
+  const [featureForm, setFeatureForm] = useState({
+    days: 90,
+    news_limit: 300,
+    fill_sentiment: true,
+    fill_breadth: true,
+    overwrite: false,
+  });
+  const [featureMsg, setFeatureMsg] = useState('');
+  const [featureErr, setFeatureErr] = useState('');
 
   useEffect(() => {
     const ai = cfgResp?.data?.ai || {};
@@ -90,6 +108,23 @@ const AdminPanel = () => {
   const refreshStatus = cfgResp?.data?.data_source?.refresh_status || {};
   const sourceHealthRows = Object.entries(sourceHealth).sort(([a], [b]) => a.localeCompare(b));
   const aiMasked = cfgResp?.data?.ai?.api_key_masked || '';
+
+  const featureStatus = featureHistoryResp?.data || {};
+  const onRunFeatureBackfill = async () => {
+    setFeatureMsg('');
+    setFeatureErr('');
+    try {
+      const resp = await backfillFeatureHistory(featureForm).unwrap();
+      if (!resp?.success) {
+        throw new Error(resp?.message || t('adminFeatureBackfillFailed'));
+      }
+      const written = (resp?.data?.sentiment?.written || 0) + (resp?.data?.breadth?.written || 0);
+      setFeatureMsg(`${t('adminFeatureBackfillDone')} (+${written})`);
+      refetchFeatureHistory();
+    } catch (err) {
+      setFeatureErr(err?.data?.message || err?.message || t('adminFeatureBackfillFailed'));
+    }
+  };
 
   const onSaveSystemConfig = async () => {
     setSaveMsg('');
@@ -131,6 +166,87 @@ const AdminPanel = () => {
           {t('adminTotalUsers')}: {usersResp?.data?.total ?? 0}
         </Badge>
       </div>
+
+      <Card className="mb-3 admin-card">
+        <Card.Header className="d-flex justify-content-between align-items-center">
+          <span>{t('adminFeatureHistory')}</span>
+          <Button size="sm" variant="outline-primary" onClick={refetchFeatureHistory}>
+            {t('adminRefresh')}
+          </Button>
+        </Card.Header>
+        <Card.Body>
+          <p className="small text-muted">{t('adminFeatureHistoryHelp')}</p>
+          {featureHistoryLoading ? (
+            <Spinner animation="border" size="sm" />
+          ) : (
+            <div className="small text-muted mb-3">
+              {t('adminFeatureBreadthCount')}: {featureStatus.breadth_days ?? 0}
+              {featureStatus.breadth_range?.start ? ` (${featureStatus.breadth_range.start} ~ ${featureStatus.breadth_range.end})` : ''}
+              {' · '}
+              {t('adminFeatureSentimentCount')}: {featureStatus.sentiment_days ?? 0}
+              {featureStatus.sentiment_range?.start ? ` (${featureStatus.sentiment_range.start} ~ ${featureStatus.sentiment_range.end})` : ''}
+            </div>
+          )}
+          <Row className="g-2 mb-2">
+            <Col md={3}>
+              <Form.Group>
+                <Form.Label>{t('adminFeatureBreadthDays')}</Form.Label>
+                <Form.Control
+                  type="number"
+                  min={7}
+                  max={365}
+                  value={featureForm.days}
+                  onChange={(e) => setFeatureForm((p) => ({ ...p, days: Number(e.target.value) }))}
+                />
+              </Form.Group>
+            </Col>
+            <Col md={3}>
+              <Form.Group>
+                <Form.Label>{t('adminFeatureSentimentNews')}</Form.Label>
+                <Form.Control
+                  type="number"
+                  min={50}
+                  max={500}
+                  value={featureForm.news_limit}
+                  onChange={(e) => setFeatureForm((p) => ({ ...p, news_limit: Number(e.target.value) }))}
+                />
+              </Form.Group>
+            </Col>
+            <Col md={6} className="d-flex align-items-end gap-3 flex-wrap">
+              <Form.Check
+                type="switch"
+                id="fill-sentiment"
+                label={t('adminFeatureFillSentiment')}
+                checked={featureForm.fill_sentiment}
+                onChange={(e) => setFeatureForm((p) => ({ ...p, fill_sentiment: e.target.checked }))}
+              />
+              <Form.Check
+                type="switch"
+                id="fill-breadth"
+                label={t('adminFeatureFillBreadth')}
+                checked={featureForm.fill_breadth}
+                onChange={(e) => setFeatureForm((p) => ({ ...p, fill_breadth: e.target.checked }))}
+              />
+              <Form.Check
+                type="switch"
+                id="overwrite-feature"
+                label={t('adminFeatureOverwrite')}
+                checked={featureForm.overwrite}
+                onChange={(e) => setFeatureForm((p) => ({ ...p, overwrite: e.target.checked }))}
+              />
+            </Col>
+          </Row>
+          {featureMsg ? <Alert variant="success">{featureMsg}</Alert> : null}
+          {featureErr ? <Alert variant="danger">{featureErr}</Alert> : null}
+          <Button
+            variant="primary"
+            disabled={backfillingFeatureHistory}
+            onClick={onRunFeatureBackfill}
+          >
+            {backfillingFeatureHistory ? t('adminFeatureBackfilling') : t('adminFeatureRunBackfill')}
+          </Button>
+        </Card.Body>
+      </Card>
 
       <Row className="g-3 mb-3 admin-top-grid">
         <Col lg={4}>

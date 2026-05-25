@@ -44,9 +44,12 @@ def extract_stock_list(stocks_response: Any) -> list[dict[str, Any]]:
     return []
 
 
-async def run_blocking(func: Callable[..., Any], *args: Any, timeout: float = 20.0) -> Any:
+async def run_blocking(func: Callable[..., Any], *args: Any, timeout: float = 20.0, **kwargs: Any) -> Any:
     loop = asyncio.get_running_loop()
-    return await asyncio.wait_for(loop.run_in_executor(None, lambda: func(*args)), timeout=timeout)
+    return await asyncio.wait_for(
+        loop.run_in_executor(None, lambda: func(*args, **kwargs)),
+        timeout=timeout,
+    )
 
 
 def to_market_symbol(symbol: str) -> str:
