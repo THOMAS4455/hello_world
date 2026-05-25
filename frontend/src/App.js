@@ -3,6 +3,7 @@ import { Provider, useDispatch, useSelector } from 'react-redux';
 import { Route, Routes, useLocation } from 'react-router-dom';
 import { PersistGate } from 'redux-persist/integration/react';
 import Navigation from './components/Navigation';
+import RequireAdmin from './components/RequireAdmin';
 import RequireAuth from './components/RequireAuth';
 import ErrorBoundary from './components/ErrorBoundary';
 import LoadingScreen from './components/LoadingScreen';
@@ -19,6 +20,7 @@ const AdminPanel = lazy(() => import('./pages/AdminPanel'));
 const Backtest = lazy(() => import('./pages/Backtest'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Home = lazy(() => import('./pages/Home'));
+const Guide = lazy(() => import('./pages/Guide'));
 const Login = lazy(() => import('./pages/Login'));
 const MarketSentiment = lazy(() => import('./pages/MarketSentiment'));
 const Predictions = lazy(() => import('./pages/Predictions'));
@@ -101,6 +103,7 @@ function AppContent() {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/" element={<Home />} />
+            <Route path="/guide" element={<Guide />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/stock/:symbol" element={<StockDetail />} />
             <Route
@@ -135,9 +138,30 @@ function AppContent() {
                 </RequireAuth>
               }
             />
-            <Route path="/admin" element={<AdminPanel />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/profile" element={<UserProfile />} />
+            <Route
+              path="/admin"
+              element={
+                <RequireAdmin>
+                  <AdminPanel />
+                </RequireAdmin>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <RequireAuth>
+                  <Settings />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <RequireAuth>
+                  <UserProfile />
+                </RequireAuth>
+              }
+            />
             <Route path="/simple-stock/:symbol" element={<StockDetail />} />
             <Route path="/enhanced" element={<Dashboard />} />
             <Route path="/enterprise" element={<Dashboard />} />

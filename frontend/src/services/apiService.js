@@ -48,32 +48,24 @@ export const apiService = createApi({
       }),
       invalidatesTags: ['AI'],
     }),
-    getAIHistory: builder.query({
+    getAIServiceStatus: builder.query({
       query: () => '/api/system/health',
+      transformResponse: (response) => response?.data?.components?.ai_service || null,
       providesTags: ['AI'],
     }),
-    getAIStats: builder.query({
+    getAIRuntimeConfig: builder.query({
       query: () => '/api/system/health',
+      transformResponse: (response) => response?.data?.runtime?.ai || null,
       providesTags: ['AI'],
-    }),
-    trainModel: builder.mutation({
-      query: (data) => ({
-        url: '/api/predictions/predict',
-        method: 'GET',
-        params: {
-          symbol: data?.symbol,
-          horizon: data?.horizon || 5,
-        },
-      }),
-      invalidatesTags: ['Prediction'],
     }),
     predict: builder.mutation({
       query: (data) => ({
         url: '/api/predictions/predict',
-        method: 'GET',
-        params: {
+        method: 'POST',
+        body: {
           symbol: data?.symbol,
           horizon: data?.horizon || 5,
+          up_threshold: data?.upThreshold ?? data?.up_threshold ?? 0.02,
         },
       }),
       invalidatesTags: ['Prediction'],
@@ -82,19 +74,35 @@ export const apiService = createApi({
       query: (data) => ({
         url: '/api/predictions/backtest',
         method: 'POST',
-        params: {
+        body: {
           symbol: data?.symbol,
           strategy: data?.strategy || 'default',
+          horizon: data?.horizon || 5,
+          test_size: data?.testSize ?? data?.test_size ?? 0.2,
+          up_threshold: data?.upThreshold ?? data?.up_threshold ?? 0.02,
         },
       }),
       invalidatesTags: ['Prediction'],
     }),
-    getPredictionHistory: builder.query({
+    trainModel: builder.mutation({
+      query: (data) => ({
+        url: '/api/predictions/predict',
+        method: 'GET',
+        params: {
+          symbol: data?.symbol,
+          horizon: data?.horizon || 5,
+          up_threshold: data?.upThreshold ?? data?.up_threshold ?? 0.02,
+        },
+      }),
+      invalidatesTags: ['Prediction'],
+    }),
+    getPredictionSnapshot: builder.query({
       query: (data = {}) => ({
         url: '/api/predictions/predict',
         params: {
           symbol: data.symbol,
           horizon: data.horizon || 5,
+          up_threshold: data?.upThreshold ?? data?.up_threshold ?? 0.02,
         },
       }),
       providesTags: ['Prediction'],
@@ -107,16 +115,18 @@ export const apiService = createApi({
       query: () => '/api/system/health',
       providesTags: ['System'],
     }),
-    forceDataUpdate: builder.mutation({
-      query: () => ({
-        url: '/api/system/health',
-        method: 'GET',
-      }),
-      invalidatesTags: ['Stock', 'System'],
-    }),
     getSystemStats: builder.query({
       query: () => '/api/system/health',
+      transformResponse: (response) => response?.data || null,
       providesTags: ['System'],
+    }),
+    forceDataRefresh: builder.mutation({
+      query: () => ({
+        url: '/api/stocks',
+        method: 'GET',
+        params: { refresh: true, limit: 20 },
+      }),
+      invalidatesTags: ['Stock', 'System'],
     }),
     login: builder.mutation({
       query: (credentials) => ({
@@ -153,11 +163,19 @@ export const apiService = createApi({
       query: () => '/api/user/profile',
       providesTags: ['User'],
     }),
+    updateUserProfile: builder.mutation({
+      query: (profile) => ({
+        url: '/api/user/profile',
+        method: 'PUT',
+        body: { profile },
+      }),
+      invalidatesTags: ['User'],
+    }),
     updateUserSettings: builder.mutation({
       query: (settings) => ({
         url: '/api/user/settings',
         method: 'PUT',
-        body: settings,
+        body: { settings },
       }),
       invalidatesTags: ['User'],
     }),
@@ -190,21 +208,22 @@ export const {
   useGetRealTimeStocksQuery,
   useQuickAnalyzeMutation,
   useAnalyzeMutation,
-  useGetAIHistoryQuery,
-  useGetAIStatsQuery,
-  useTrainModelMutation,
+  useGetAIServiceStatusQuery,
+  useGetAIRuntimeConfigQuery,
   usePredictMutation,
   useBacktestMutation,
-  useGetPredictionHistoryQuery,
+  useTrainModelMutation,
+  useGetPredictionSnapshotQuery,
   useHealthCheckQuery,
   useGetServiceStatusQuery,
-  useForceDataUpdateMutation,
   useGetSystemStatsQuery,
+  useForceDataRefreshMutation,
   useLoginMutation,
   useRegisterMutation,
   useRefreshSessionMutation,
   useLogoutSessionMutation,
   useGetUserProfileQuery,
+  useUpdateUserProfileMutation,
   useUpdateUserSettingsMutation,
   useGetAdminUsersQuery,
   useGetAdminDatabaseInfoQuery,

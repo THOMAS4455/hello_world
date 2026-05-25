@@ -73,31 +73,31 @@ const Register = () => {
           <Col lg={6} className="d-flex">
             <Card className="auth-side-card w-100">
               <Card.Body>
-                <PageLogo title="AlphaScope" subtitle="Create Account" glyph="R" tone="teal" compact />
+                <PageLogo title="AlphaScope" subtitle={isEnglish ? 'Create account' : '创建账户'} glyph="R" tone="blue" compact />
                 <div className="auth-side-tag">
-                  {isEnglish ? 'New User Registration' : '新用户注册'}
+                  {isEnglish ? 'New Workspace Account' : '创建工作区账户'}
                 </div>
                 <h1 className="auth-side-title">{isEnglish ? 'Create your account' : '创建你的账户'}</h1>
                 <p className="auth-side-text">
                   {isEnglish
-                    ? 'After registering, you can save preferences, manage analysis results, and share one account state across pages.'
-                    : '注册后可以保存个人偏好、管理分析结果，并在不同页面之间共享同一账户状态。'}
+                    ? 'Register to save preferences, keep your analysis state, and use one identity across all research tools.'
+                    : '注册后可以保存偏好、保留分析状态，并在所有研究工具之间使用同一身份。'}
                 </p>
                 <div className="auth-side-points">
                   <div>
                     {isEnglish
                       ? 'One account across forecasts, backtests, and sentiment'
-                      : '一个账户贯通预测、回测与情绪分析'}
+                      : '在预测、回测和情绪分析之间共用同一账户'}
                   </div>
                   <div>
                     {isEnglish
-                      ? 'Profile and settings can be stored long-term'
-                      : '个人资料与设置可长期保存'}
+                      ? 'Profile and settings saved long-term'
+                      : '长期保存个人资料与设置'}
                   </div>
                   <div>
                     {isEnglish
-                      ? 'Ready for future permissions and team collaboration'
-                      : '便于后续扩展权限体系与团队协作'}
+                      ? 'Ready for later collaboration and permissions'
+                      : '便于后续扩展协作与权限体系'}
                   </div>
                 </div>
               </Card.Body>
@@ -107,7 +107,7 @@ const Register = () => {
           <Col lg={6} className="d-flex">
             <Card className="auth-form-card w-100">
               <Card.Body>
-                <PageLogo title="Register" subtitle="Join Platform" glyph="R" tone="rose" compact />
+                <PageLogo title={isEnglish ? 'Register' : '注册'} subtitle={isEnglish ? 'Join platform' : '加入平台'} glyph="R" tone="blue" compact />
                 <h2 className="auth-form-title">{isEnglish ? 'Create account' : '注册账户'}</h2>
                 <p className="auth-form-subtitle">
                   {isEnglish ? 'Fill in the form to start using the system right away' : '填写信息后即可开始使用系统'}
@@ -173,7 +173,7 @@ const Register = () => {
                 </Form>
 
                 <div className="auth-footer">
-                  {isEnglish ? 'Already have an account? ' : '已有账号？'}
+                  {isEnglish ? 'Already have an account? ' : '已有账户？'}
                   <Link to="/login">{isEnglish ? 'Go to login' : '去登录'}</Link>
                 </div>
               </Card.Body>

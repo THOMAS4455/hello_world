@@ -26,6 +26,10 @@ models/saved_models/*.joblib
 # Data cache
 data/storage/*.csv
 data/storage/*.json
+data/prediction_runs.json
+data/sessions.json
+data/stocks_cache.json
+data/feature_history/
 
 # IDE
 .vscode/

@@ -1,17 +1,48 @@
 import { formatChange, formatPrice, formatVolume } from '../utils/stockUtils';
+import { isAshareTradingSession } from '../utils/tradingSession';
+import {
+  apiRequest,
+  buildQuery,
+  getApiBaseUrl,
+  getAuthHeaders,
+  normalizeApiError,
+} from './apiClient';
 
 class StockApiService {
   constructor() {
-    this.baseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
+    this.baseUrl = getApiBaseUrl();
     this.cache = new Map();
     this.cacheTimeout = 30000;
+    this.liveMarketData = true;
   }
 
-  getCacheKey(endpoint, params = {}) {
-    return `${endpoint}:${JSON.stringify(params)}`;
+  shouldUseClientCache(cacheKey) {
+    if (!this.liveMarketData) {
+      return true;
+    }
+    const key = String(cacheKey || '');
+    const marketPrefixes = [
+      '/api/stocks',
+      '/api/stocks/market-overview',
+      '/api/stocks/realtime',
+      '/api/stocks/search',
+    ];
+    if (marketPrefixes.some((prefix) => key.includes(prefix)) && !isAshareTradingSession()) {
+      return true;
+    }
+    const livePrefixes = [
+      '/api/stocks',
+      '/api/stocks/market-overview',
+      '/api/stocks/realtime',
+      '/api/stocks/search',
+    ];
+    return !livePrefixes.some((prefix) => key.includes(prefix));
   }
 
   getCachedData(key) {
+    if (!this.shouldUseClientCache(key)) {
+      return null;
+    }
     const cached = this.cache.get(key);
     if (!cached) {
       return null;
@@ -26,10 +57,17 @@ class StockApiService {
   }
 
   setCachedData(key, data) {
+    if (!this.shouldUseClientCache(key)) {
+      return;
+    }
     this.cache.set(key, {
       data,
       timestamp: Date.now(),
     });
+  }
+
+  getCacheKey(endpoint, params = {}) {
+    return `${endpoint}:${JSON.stringify(params)}`;
   }
 
   clearCache(pattern = null) {
@@ -46,43 +84,15 @@ class StockApiService {
   }
 
   buildQuery(params = {}) {
-    const searchParams = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value === undefined || value === null || value === '') {
-        return;
-      }
-      if (Array.isArray(value)) {
-        if (value.length > 0) {
-          searchParams.append(key, value.join(','));
-        }
-        return;
-      }
-      searchParams.append(key, String(value));
-    });
-    const query = searchParams.toString();
-    return query ? `?${query}` : '';
+    return buildQuery(params);
   }
 
   getAuthHeaders() {
-    try {
-      const raw = localStorage.getItem('persist:root');
-      if (!raw) {
-        return {};
-      }
-      const parsed = JSON.parse(raw);
-      const authState = parsed?.auth ? JSON.parse(parsed.auth) : null;
-      const token = authState?.token;
-      return token ? { Authorization: `Bearer ${token}` } : {};
-    } catch {
-      return {};
-    }
+    return getAuthHeaders();
   }
 
   normalizeError(status, payload, fallback = 'Request failed') {
-    if (payload?.message) {
-      return new Error(payload.message);
-    }
-    return new Error(`${fallback}: ${status}`);
+    return normalizeApiError(status, payload, fallback);
   }
 
   normalizeStock(stock = {}) {
@@ -95,44 +105,16 @@ class StockApiService {
   }
 
   async request(endpoint, options = {}) {
-    const query = options.params ? this.buildQuery(options.params) : '';
-    const url = `${this.baseUrl}${endpoint}${query}`;
-    const method = options.method || 'GET';
-    const headers = {
-      ...this.getAuthHeaders(),
-      ...options.headers,
-    };
-
-    if (options.body !== undefined && !headers['Content-Type']) {
-      headers['Content-Type'] = 'application/json';
-    }
-
-    const response = await fetch(url, {
-      method,
-      headers,
-      body: options.body,
-    });
-
-    let payload = null;
-    try {
-      payload = await response.json();
-    } catch {
-      payload = null;
-    }
-
-    if (!response.ok || payload?.success === false) {
-      throw this.normalizeError(response.status, payload);
-    }
-
-    return payload;
+    return apiRequest(endpoint, { ...options, baseUrl: this.baseUrl });
   }
 
-  async getStocks(params = {}) {
+  async getStocksPayload(params = {}) {
     const effectiveParams = {
-      limit: 600,
+      limit: 0,
+      refresh: false,
       ...params,
     };
-    const cacheKey = this.getCacheKey('/api/stocks', effectiveParams);
+    const cacheKey = this.getCacheKey('/api/stocks:payload', effectiveParams);
     const cached = this.getCachedData(cacheKey);
     if (cached) {
       return cached;
@@ -143,13 +125,25 @@ class StockApiService {
       params: effectiveParams,
     });
     const stocks = Array.isArray(response?.data?.stocks) ? response.data.stocks : [];
-    const formattedStocks = stocks.map((stock) => this.normalizeStock(stock));
-    this.setCachedData(cacheKey, formattedStocks);
-    return formattedStocks;
+    const payload = {
+      stocks: stocks.map((stock) => this.normalizeStock(stock)),
+      total: Number(response?.data?.total || stocks.length),
+      returned: Number(response?.data?.returned || stocks.length),
+      lastUpdate: response?.data?.last_update || null,
+      freshness: response?.data?.freshness || null,
+    };
+    this.setCachedData(cacheKey, payload);
+    return payload;
+  }
+
+  async getStocks(params = {}) {
+    const payload = await this.getStocksPayload(params);
+    return payload.stocks;
   }
 
   async getMarketOverview(params = {}) {
-    const cacheKey = this.getCacheKey('/api/stocks/market-overview', params);
+    const effectiveParams = { refresh: false, ...params };
+    const cacheKey = this.getCacheKey('/api/stocks/market-overview', effectiveParams);
     const cached = this.getCachedData(cacheKey);
     if (cached) {
       return cached;
@@ -157,7 +151,7 @@ class StockApiService {
 
     const response = await this.request('/api/stocks/market-overview', {
       method: 'GET',
-      params,
+      params: effectiveParams,
     });
     this.setCachedData(cacheKey, response.data || null);
     return response.data || null;
@@ -203,7 +197,7 @@ class StockApiService {
 
     const response = await this.request('/api/stocks/search', {
       method: 'GET',
-      params: { q: keyword },
+      params: { q: keyword, refresh: true },
     });
     const stocks = Array.isArray(response?.data?.stocks) ? response.data.stocks : [];
     const formattedStocks = stocks.map((stock) => this.normalizeStock(stock));
@@ -232,16 +226,50 @@ class StockApiService {
       throw new Error('Stock symbol is required');
     }
 
-    const params = {
+    const body = {
       symbol,
       horizon: options.horizon ?? 5,
       up_threshold: options.upThreshold ?? options.up_threshold ?? 0.02,
     };
-    const response = await this.request('/api/predictions/predict', {
+    const controller = new AbortController();
+    const timeoutMs = Number(options.timeoutMs || 190000);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await this.request('/api/predictions/predict', {
+        method: 'POST',
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      return response.data;
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        throw new Error('Prediction request timed out. First run may take up to 3 minutes.');
+      }
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async getPredictionHistory(symbol = '', limit = 12) {
+    const response = await this.request('/api/predictions/history', {
       method: 'GET',
-      params,
+      params: {
+        symbol: symbol || undefined,
+        limit,
+      },
     });
-    return response.data;
+    return Array.isArray(response?.data?.items) ? response.data.items : [];
+  }
+
+  async getPredictionRun(runId) {
+    if (!runId) {
+      throw new Error('Prediction run id is required');
+    }
+    const response = await this.request(`/api/predictions/history/${runId}`, {
+      method: 'GET',
+    });
+    return response?.data?.item || null;
   }
 
   async runBacktest(symbol, options = {}) {
@@ -249,18 +277,47 @@ class StockApiService {
       throw new Error('Stock symbol is required');
     }
 
-    const params = {
+    const body = {
       symbol,
       strategy: options.strategy ?? 'default',
       horizon: options.horizon ?? 5,
       test_size: options.testSize ?? options.test_size ?? 0.2,
       up_threshold: options.upThreshold ?? options.up_threshold ?? 0.02,
+      min_confidence: options.minConfidence ?? options.min_confidence ?? 0,
     };
     const response = await this.request('/api/predictions/backtest', {
       method: 'POST',
-      params,
+      body: JSON.stringify(body),
     });
     return response.data;
+  }
+
+  async getDataHealth() {
+    const response = await this.request('/api/stocks/data-health', {
+      method: 'GET',
+    });
+    return response.data || null;
+  }
+
+  async getBacktestHistory(symbol = '', limit = 12) {
+    const response = await this.request('/api/predictions/backtest-history', {
+      method: 'GET',
+      params: {
+        symbol: symbol || undefined,
+        limit,
+      },
+    });
+    return Array.isArray(response?.data?.items) ? response.data.items : [];
+  }
+
+  async getBacktestRun(runId) {
+    if (!runId) {
+      throw new Error('Backtest run id is required');
+    }
+    const response = await this.request(`/api/predictions/backtest-history/${runId}`, {
+      method: 'GET',
+    });
+    return response?.data?.item || null;
   }
 
   async getAIAnalysis(query) {
@@ -313,6 +370,29 @@ class StockApiService {
 
   async getHealthStatus() {
     return this.request('/health');
+  }
+
+  async getUserProfile() {
+    const response = await this.request('/api/user/profile', {
+      method: 'GET',
+    });
+    return response?.data?.user || null;
+  }
+
+  async updateUserProfile(profile = {}) {
+    const response = await this.request('/api/user/profile', {
+      method: 'PUT',
+      body: JSON.stringify({ profile }),
+    });
+    return response?.data?.user || null;
+  }
+
+  async updateUserSettings(settings = {}) {
+    const response = await this.request('/api/user/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ settings }),
+    });
+    return response?.data?.user || null;
   }
 
   async batchGetStocks(symbols = []) {

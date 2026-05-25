@@ -365,5 +365,35 @@ class AuthService:
             self._save_users(payload)
             return self._public_user(target)
 
+    def update_user_profile(self, token: str, profile: Dict[str, Any]) -> Dict[str, Any]:
+        user = self.validate_token(token)
+        if not isinstance(profile, dict):
+            raise Exception("Profile payload must be an object")
+
+        allowed_fields = {"phone", "company", "bio"}
+
+        with self._lock:
+            payload = self._load_users()
+            target = None
+            for row in payload["users"]:
+                if int(row.get("id", -1)) == int(user["id"]):
+                    target = row
+                    break
+            if target is None:
+                raise Exception("User does not exist")
+
+            existing = target.get("profile", {})
+            if not isinstance(existing, dict):
+                existing = {}
+
+            for key, value in profile.items():
+                if key not in allowed_fields:
+                    continue
+                existing[key] = str(value or "").strip()
+
+            target["profile"] = existing
+            self._save_users(payload)
+            return self._public_user(target)
+
 
 auth_service = AuthService()

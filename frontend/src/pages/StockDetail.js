@@ -5,6 +5,7 @@ import Plot from 'react-plotly.js';
 import { useAppI18n } from '../i18n';
 import PageLogo from '../components/PageLogo';
 import stockApiService from '../services/stockApi';
+import '../styles/StockDetail.css';
 
 const parseIndicators = (indicators) => {
   if (!indicators || typeof indicators !== 'object') return [];
@@ -28,7 +29,7 @@ const StockDetail = () => {
 
   const fetchDetail = async () => {
     if (!symbol) {
-      setError(isEnglish ? 'Missing stock symbol.' : '缺少股票代码');
+      setError(isEnglish ? 'Missing stock symbol.' : '缺少股票代码。');
       setLoading(false);
       return;
     }
@@ -41,7 +42,7 @@ const StockDetail = () => {
       setHistory(Array.isArray(detail.history) ? detail.history : []);
       setIndicators(parseIndicators(detail.indicators));
     } catch (err) {
-      setError(err?.message || (isEnglish ? 'Failed to load stock details.' : '加载股票详情失败'));
+      setError(err?.message || (isEnglish ? 'Failed to load stock details.' : '加载股票详情失败。'));
       setStockData(null);
       setHistory([]);
       setIndicators([]);
@@ -65,7 +66,7 @@ const StockDetail = () => {
 
   if (loading) {
     return (
-      <Container className="py-5 text-center">
+      <Container className="py-5 text-center stock-detail-page">
         <Spinner animation="border" />
         <p className="mt-3 mb-0">{isEnglish ? 'Loading stock details...' : '正在加载股票详情...'}</p>
       </Container>
@@ -74,8 +75,8 @@ const StockDetail = () => {
 
   if (error || !stockData) {
     return (
-      <Container className="py-4">
-        <Alert variant="danger">{error || (isEnglish ? 'Stock data not found.' : '股票数据不存在')}</Alert>
+      <Container className="py-4 stock-detail-page">
+        <Alert variant="danger">{error || (isEnglish ? 'Stock data not found.' : '未找到股票数据。')}</Alert>
         <Button onClick={() => navigate('/')} variant="primary">
           {isEnglish ? 'Back to Home' : '返回首页'}
         </Button>
@@ -84,34 +85,36 @@ const StockDetail = () => {
   }
 
   return (
-    <Container className="py-4">
+    <Container className="py-4 stock-detail-page">
       <Button variant="outline-secondary" className="mb-3" onClick={() => navigate('/')}>
         {isEnglish ? 'Back to Home' : '返回首页'}
       </Button>
 
-      <Card className="mb-3">
-        <Card.Body>
-          <Row className="align-items-center">
-            <Col md={8}>
-              <PageLogo title="Stock Detail" subtitle="Price + Signals" glyph="K" tone="blue" compact />
-              <h2 className="mb-1">{stockData.name || symbol}</h2>
-              <div className="text-muted mb-3">{stockData.symbol || symbol}</div>
-              <div className={`h3 mb-1 ${changeClass}`}>
-                {price.toFixed(2)} ({changePercent >= 0 ? '+' : ''}
-                {changePercent.toFixed(2)}%)
-              </div>
-            </Col>
-            <Col md={4} className="text-md-end">
-              <Button variant="success" className="me-2 mb-2 mb-md-0" onClick={() => navigate(`/predictions?stock=${symbol}`)}>
-                {isEnglish ? 'Go to Forecast' : '查看预测'}
-              </Button>
-              <Button variant="primary" onClick={() => navigate(`/ai-chat?stock=${symbol}`)}>
-                {isEnglish ? 'AI Analysis' : 'AI 分析'}
-              </Button>
-            </Col>
-          </Row>
-        </Card.Body>
-      </Card>
+      <section className="stock-detail-hero">
+        <div>
+          <PageLogo
+            title={isEnglish ? 'Stock Detail' : '股票详情'}
+            subtitle={isEnglish ? 'Price, history, and signals' : '价格、历史与信号'}
+            glyph="K"
+            tone="blue"
+            compact
+          />
+          <h2>{stockData.name || symbol}</h2>
+          <div className="stock-detail-subtext mb-3">{stockData.symbol || symbol}</div>
+          <div className={`stock-detail-price ${changeClass}`}>
+            {price.toFixed(2)} ({changePercent >= 0 ? '+' : ''}
+            {changePercent.toFixed(2)}%)
+          </div>
+        </div>
+        <div className="stock-detail-actions">
+          <Button variant="outline-light" onClick={() => navigate(`/predictions?stock=${symbol}`)}>
+            {isEnglish ? 'Open Forecast' : '查看预测'}
+          </Button>
+          <Button variant="primary" onClick={() => navigate(`/ai-chat?stock=${symbol}`)}>
+            {isEnglish ? 'AI Analysis' : 'AI 分析'}
+          </Button>
+        </div>
+      </section>
 
       <Row>
         <Col lg={8} className="mb-3">
@@ -120,7 +123,7 @@ const StockDetail = () => {
             <Card.Body>
               {chartSource.length === 0 ? (
                 <div className="text-muted">
-                  {isEnglish ? 'No historical price data available for plotting.' : '暂无可绘制的历史价格数据'}
+                  {isEnglish ? 'No historical price data available for plotting.' : '暂无可绘制的历史价格数据。'}
                 </div>
               ) : (
                 <Plot
@@ -130,13 +133,15 @@ const StockDetail = () => {
                       y: chartSource.map((x) => Number(x.close ?? 0)),
                       type: 'scatter',
                       mode: 'lines',
-                      line: { color: '#0f7ae5', width: 2 },
+                      line: { color: '#3b82f6', width: 2 },
                       name: isEnglish ? 'Close' : '收盘价',
                     },
                   ]}
                   layout={{
                     autosize: true,
                     height: 320,
+                    paper_bgcolor: '#ffffff',
+                    plot_bgcolor: '#ffffff',
                     margin: { l: 46, r: 20, t: 20, b: 44 },
                     xaxis: { title: isEnglish ? 'Date' : '日期' },
                     yaxis: { title: isEnglish ? 'Price' : '价格' },
@@ -153,7 +158,7 @@ const StockDetail = () => {
             <Card.Body>
               {chartSource.length === 0 ? (
                 <div className="text-muted">
-                  {isEnglish ? 'No volume data available for plotting.' : '暂无可绘制的成交量数据'}
+                  {isEnglish ? 'No volume data available for plotting.' : '暂无可绘制的成交量数据。'}
                 </div>
               ) : (
                 <Plot
@@ -162,13 +167,15 @@ const StockDetail = () => {
                       x: chartSource.map((x) => x.date),
                       y: chartSource.map((x) => Number(x.volume ?? 0)),
                       type: 'bar',
-                      marker: { color: '#6c8199' },
+                      marker: { color: '#94a3b8' },
                       name: isEnglish ? 'Volume' : '成交量',
                     },
                   ]}
                   layout={{
                     autosize: true,
                     height: 240,
+                    paper_bgcolor: '#ffffff',
+                    plot_bgcolor: '#ffffff',
                     margin: { l: 46, r: 20, t: 20, b: 44 },
                     xaxis: { title: isEnglish ? 'Date' : '日期' },
                     yaxis: { title: isEnglish ? 'Volume' : '成交量' },
@@ -184,9 +191,9 @@ const StockDetail = () => {
             <Card.Header>{isEnglish ? 'Historical Data' : '历史数据'}</Card.Header>
             <Card.Body>
               {history.length === 0 ? (
-                <div className="text-muted">{isEnglish ? 'No historical data available.' : '暂无历史数据'}</div>
+                <div className="text-muted">{isEnglish ? 'No historical data available.' : '暂无历史数据。'}</div>
               ) : (
-                <div style={{ maxHeight: 420, overflowY: 'auto' }}>
+                <div className="stock-detail-table-wrap">
                   <Table striped hover size="sm" className="mb-0">
                     <thead>
                       <tr>
@@ -222,10 +229,10 @@ const StockDetail = () => {
             <Card.Header>{isEnglish ? 'Technical Indicators' : '技术指标'}</Card.Header>
             <Card.Body>
               {indicators.length === 0 ? (
-                <div className="text-muted">{isEnglish ? 'No technical indicators available.' : '暂无技术指标'}</div>
+                <div className="text-muted">{isEnglish ? 'No technical indicators available.' : '暂无技术指标。'}</div>
               ) : (
                 indicators.map((item) => (
-                  <div key={item.name} className="d-flex justify-content-between align-items-center py-2 border-bottom">
+                  <div key={item.name} className="stock-detail-sidebar-item">
                     <div>
                       <div className="fw-semibold">{item.name}</div>
                       <div className="small text-muted">{item.value === null ? '-' : item.value.toFixed(4)}</div>

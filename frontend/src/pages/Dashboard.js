@@ -16,13 +16,18 @@ import {
 import { useAppI18n } from '../i18n';
 import PageLogo from '../components/PageLogo';
 import stockApiService from '../services/stockApi';
+import {
+  getMarketAutoRefreshIntervalMs,
+  isAshareTradingSession,
+  shouldRequestLiveMarketRefresh,
+} from '../utils/tradingSession';
 import '../styles/Dashboard.css';
 
 const PAGE_SIZE = 50;
-const FETCH_LIMIT = 1200;
+const MIN_EXPECTED_STOCKS = 500;
 
 const Dashboard = () => {
-  const { language } = useAppI18n();
+  const { language, t } = useAppI18n();
   const isEnglish = language === 'en-US';
   const navigate = useNavigate();
   const [stocks, setStocks] = useState([]);
@@ -32,21 +37,26 @@ const Dashboard = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [totalStocks, setTotalStocks] = useState(0);
   const [marketOverview, setMarketOverview] = useState(null);
+  const [dataFreshness, setDataFreshness] = useState(null);
+  const [dataHealth, setDataHealth] = useState(null);
   const [page, setPage] = useState(1);
   const [remoteSearchStocks, setRemoteSearchStocks] = useState([]);
   const [searchingRemote, setSearchingRemote] = useState(false);
   const [trendFilter, setTrendFilter] = useState('all');
   const [sortKey, setSortKey] = useState('change_desc');
 
-  const fetchStocks = async () => {
+  const fetchStocks = async (forceRefresh = false) => {
     try {
       setLoading(true);
       setError('');
-      const [stocksResp, overviewResp] = await Promise.all([
-        stockApiService.getStocks({ limit: FETCH_LIMIT, refresh: true }),
-        stockApiService.getMarketOverview({ refresh: true }),
+      const refresh = shouldRequestLiveMarketRefresh(forceRefresh);
+      const [stocksPayload, overviewResp, healthResp] = await Promise.all([
+        stockApiService.getStocksPayload({ refresh }),
+        stockApiService.getMarketOverview({ refresh }),
+        stockApiService.getDataHealth().catch(() => null),
       ]);
 
+      const stocksResp = stocksPayload?.stocks || [];
       if (Array.isArray(stocksResp)) {
         const validStocks = stocksResp.filter(
           (stock) =>
@@ -56,7 +66,9 @@ const Dashboard = () => {
             Number.isFinite(Number(stock.price))
         );
         setStocks(validStocks);
-        setTotalStocks(validStocks.length);
+        setTotalStocks(Number(stocksPayload?.total || validStocks.length));
+        setDataFreshness(stocksPayload?.freshness || null);
+        setDataHealth(healthResp || null);
         setMarketOverview(overviewResp || null);
         setLastUpdate(new Date());
         setPage(1);
@@ -65,21 +77,29 @@ const Dashboard = () => {
 
       setStocks([]);
       setTotalStocks(0);
+      setDataFreshness(null);
+      setDataHealth(null);
       setMarketOverview(null);
-      setError(isEnglish ? 'Unexpected data format.' : '数据格式异常');
+      setError(t('dashboardUnexpectedFormat'));
     } catch (err) {
       setStocks([]);
       setTotalStocks(0);
+      setDataFreshness(null);
+      setDataHealth(null);
       setMarketOverview(null);
-      setError(err?.message || (isEnglish ? 'Failed to fetch stock data.' : '获取股票数据失败'));
+      setError(err?.message || t('dashboardFetchFailed'));
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchStocks();
-    const timer = setInterval(fetchStocks, 120000);
+    fetchStocks(false);
+    const intervalMs = getMarketAutoRefreshIntervalMs();
+    if (!intervalMs) {
+      return undefined;
+    }
+    const timer = setInterval(() => fetchStocks(false), intervalMs);
     return () => clearInterval(timer);
   }, []);
 
@@ -187,6 +207,11 @@ const Dashboard = () => {
       currency: 'CNY',
     }).format(Number(price || 0));
 
+  const sourceHealthRows = useMemo(() => {
+    const entries = Object.entries(dataHealth?.source_health || {});
+    return entries.sort(([a], [b]) => a.localeCompare(b));
+  }, [dataHealth]);
+
   const formatPercent = (value = 0) => {
     const num = Number(value || 0);
     return `${num >= 0 ? '+' : ''}${num.toFixed(2)}%`;
@@ -198,28 +223,33 @@ const Dashboard = () => {
     return 'text-muted';
   };
 
+  const isPartialMarketData = metrics.totalMarket > 0 && metrics.totalMarket < MIN_EXPECTED_STOCKS;
+  const inTradingSession = dataFreshness?.in_trading_session ?? isAshareTradingSession();
+  const usingSessionSnapshot = Boolean(dataFreshness?.refresh_skipped || (!dataFreshness?.is_live && !inTradingSession));
+
   return (
     <Container className="dashboard-page py-3 py-md-4">
       <div className="dashboard-hero mb-4">
         <div>
-          <PageLogo title="Market Console" subtitle="Realtime Watchboard" glyph="D" tone="blue" />
-          <div className="hero-tag mb-2">{isEnglish ? 'Realtime Market Console' : '实时市场控制台'}</div>
-          <h1 className="mb-2">{isEnglish ? 'Market Overview' : '市场总览'}</h1>
-          <p className="mb-0">
-            {isEnglish
-              ? 'Search, filter, sort, and jump into details from one screen to keep your analysis loop tight.'
-              : '在一个页面完成检索、趋势筛选、排序和详情跳转，让分析路径更短，交互更直接。'}
-          </p>
+          <PageLogo
+            title={t('navDashboard')}
+            subtitle={t('dashboardSubtitle')}
+            glyph="D"
+            tone="blue"
+          />
+          <div className="hero-tag mb-2">{t('dashboardHeroTag')}</div>
+          <h1 className="mb-2">{t('dashboardTitle')}</h1>
+          <p className="mb-0">{t('dashboardDescription')}</p>
         </div>
         <div className="dashboard-hero-actions">
-          <Button variant="outline-primary" onClick={fetchStocks} disabled={loading}>
-            {loading ? (isEnglish ? 'Refreshing...' : '刷新中...') : isEnglish ? 'Refresh Data' : '刷新数据'}
+          <Button variant="outline-primary" onClick={() => fetchStocks(true)} disabled={loading}>
+            {loading ? t('dashboardRefreshing') : t('dashboardRefresh')}
           </Button>
           <Button variant="primary" onClick={() => navigate('/market-sentiment')}>
-            {isEnglish ? 'Sentiment' : '情绪分析'}
+            {t('dashboardSentiment')}
           </Button>
           <Button variant="dark" onClick={() => navigate('/ai-chat')}>
-            {isEnglish ? 'AI Assistant' : 'AI 助手'}
+            {t('dashboardAiAssistant')}
           </Button>
         </div>
       </div>
@@ -228,7 +258,7 @@ const Dashboard = () => {
         <Col md={3} sm={6}>
           <Card className="metric-card">
             <Card.Body>
-              <div className="metric-label">{isEnglish ? 'Total Market' : '市场总数'}</div>
+              <div className="metric-label">{t('dashboardTotalMarket')}</div>
               <div className="metric-value">{metrics.totalMarket}</div>
             </Card.Body>
           </Card>
@@ -236,7 +266,7 @@ const Dashboard = () => {
         <Col md={3} sm={6}>
           <Card className="metric-card">
             <Card.Body>
-              <div className="metric-label">{isEnglish ? 'Rising Stocks' : '上涨家数'}</div>
+              <div className="metric-label">{t('dashboardRising')}</div>
               <div className="metric-value text-success">{metrics.riseCount}</div>
             </Card.Body>
           </Card>
@@ -244,7 +274,7 @@ const Dashboard = () => {
         <Col md={3} sm={6}>
           <Card className="metric-card">
             <Card.Body>
-              <div className="metric-label">{isEnglish ? 'Falling Stocks' : '下跌家数'}</div>
+              <div className="metric-label">{t('dashboardFalling')}</div>
               <div className="metric-value text-danger">{metrics.dropCount}</div>
             </Card.Body>
           </Card>
@@ -252,12 +282,79 @@ const Dashboard = () => {
         <Col md={3} sm={6}>
           <Card className="metric-card">
             <Card.Body>
-              <div className="metric-label">{isEnglish ? 'Average Change' : '平均涨跌幅'}</div>
+              <div className="metric-label">{t('dashboardAvgChange')}</div>
               <div className={`metric-value ${getChangeClass(metrics.avgChange)}`}>{formatPercent(metrics.avgChange)}</div>
             </Card.Body>
           </Card>
         </Col>
       </Row>
+
+      {dataHealth && sourceHealthRows.length > 0 && (
+        <Card className="mb-3">
+          <Card.Header className="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <strong>{t('dashboardDataHealth')}</strong>
+            <div className="small text-muted">
+              {t('dashboardLiveOnly')}: {dataHealth.live_only ? t('dashboardHealthy') : t('dashboardUnhealthy')}
+              {' · '}
+              {t('dashboardHealthySources')}: {dataHealth.healthy_sources}/{dataHealth.total_sources}
+            </div>
+          </Card.Header>
+          <Card.Body className="p-0">
+            <div className="table-responsive">
+              <table className="table table-sm mb-0">
+                <thead>
+                  <tr>
+                    <th>{t('dashboardSourceName')}</th>
+                    <th>{t('dashboardSourceStatus')}</th>
+                    <th>{t('dashboardSourceLatency')}</th>
+                    <th>{t('dashboardSourceItems')}</th>
+                    <th>{t('dashboardSourceChecked')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sourceHealthRows.map(([source, item]) => (
+                    <tr key={source}>
+                      <td>{source}</td>
+                      <td>
+                        <Badge bg={item?.success ? 'success' : 'danger'}>
+                          {item?.success ? t('dashboardHealthy') : t('dashboardUnhealthy')}
+                        </Badge>
+                      </td>
+                      <td>{item?.latency_ms ?? '-'}</td>
+                      <td>{item?.item_count ?? '-'}</td>
+                      <td className="small text-muted">{item?.last_checked_at || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card.Body>
+        </Card>
+      )}
+
+      {usingSessionSnapshot && (
+        <Alert variant="info" className="mb-3">
+          {isEnglish
+            ? `Outside trading hours (09:25-15:00). Showing the ${dataFreshness?.effective_trading_date || 'latest'} snapshot. Click refresh to force a live pull.`
+            : `当前不在交易时段（09:25-15:00），展示 ${dataFreshness?.effective_trading_date || '最新'} 交易日快照。如需强制拉取实时数据，请点击刷新。`}
+        </Alert>
+      )}
+
+      {isPartialMarketData && (
+        <Alert variant="warning" className="mb-3">
+          {isEnglish
+            ? `Only ${metrics.totalMarket} stocks were loaded from live sources. Please retry refresh — cached snapshots are no longer used for market data.`
+            : `实时源仅拉取到 ${metrics.totalMarket} 只股票。请重试刷新——市场数据已不再使用缓存快照。`}
+          {dataFreshness?.source && (
+            <div className="small mt-1 text-muted">
+              {isEnglish ? 'Source' : '数据源'}: {dataFreshness.source}
+              {dataFreshness?.source_summary?.baseline_source
+                ? ` / ${isEnglish ? 'baseline' : '基线'}: ${dataFreshness.source_summary.baseline_source}`
+                : ''}
+            </div>
+          )}
+        </Alert>
+      )}
 
       <Card className="mb-3 dashboard-control-card">
         <Card.Body>

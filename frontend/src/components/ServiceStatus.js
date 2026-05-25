@@ -28,8 +28,11 @@ const ServiceStatus = () => {
   const [expanded, setExpanded] = useState(false);
   const [dataStatus, setDataStatus] = useState('checking');
   const [aiStatus, setAiStatus] = useState('checking');
+  const [predictionStatus, setPredictionStatus] = useState('checking');
   const [dataInfo, setDataInfo] = useState(null);
   const [aiInfo, setAiInfo] = useState(null);
+  const [predictionInfo, setPredictionInfo] = useState(null);
+  const [realtimeInfo, setRealtimeInfo] = useState(null);
   const [lastCheck, setLastCheck] = useState(null);
   const [checking, setChecking] = useState(false);
 
@@ -52,14 +55,36 @@ const ServiceStatus = () => {
       const systemResp = await fetch(`${API_BASE_URL}/api/system/health`);
       if (systemResp.ok) {
         const system = await systemResp.json();
+        const data = system?.data?.components?.data_service || null;
         const ai = system?.data?.components?.ai_service || null;
+        const prediction = system?.data?.components?.prediction_service || null;
+        setDataInfo(data);
         setAiInfo(ai);
+        setPredictionInfo(prediction);
+        setDataStatus(data?.status === 'healthy' ? 'online' : 'offline');
         setAiStatus(ai?.status === 'online' ? 'online' : 'offline');
+        setPredictionStatus(prediction?.status === 'healthy' ? 'online' : 'offline');
       } else {
+        setDataStatus('offline');
         setAiStatus('offline');
+        setPredictionStatus('offline');
       }
     } catch {
+      setDataStatus('offline');
       setAiStatus('offline');
+      setPredictionStatus('offline');
+    }
+
+    try {
+      const realtimeResp = await fetch(`${API_BASE_URL}/api/stocks/realtime`);
+      if (realtimeResp.ok) {
+        const realtime = await realtimeResp.json();
+        setRealtimeInfo(realtime?.data || null);
+      } else {
+        setRealtimeInfo(null);
+      }
+    } catch {
+      setRealtimeInfo(null);
     }
 
     setLastCheck(new Date());
@@ -72,7 +97,16 @@ const ServiceStatus = () => {
     return () => clearInterval(timer);
   }, []);
 
-  const overallHealthy = dataStatus === 'online' && aiStatus === 'online';
+  const overallHealthy = dataStatus === 'online' && aiStatus === 'online' && predictionStatus === 'online';
+  const freshness = realtimeInfo?.freshness || {};
+  const sourceHealth = freshness?.source_health || {};
+  const sourceRows = Object.values(sourceHealth).slice(0, 3);
+  const freshnessLabel = (() => {
+    if (!freshness?.source) return 'No realtime snapshot';
+    if (freshness?.is_live) return `Live | ${freshness.source}`;
+    const staleSeconds = Number(freshness?.stale_seconds || 0);
+    return `Stale ${Math.round(staleSeconds)}s | ${freshness.source}`;
+  })();
 
   return (
     <div className="service-fab-wrap">
@@ -105,7 +139,7 @@ const ServiceStatus = () => {
             <StatusRow
               label={t('serviceDataService')}
               status={dataStatus}
-              detail={`${t('serviceVersion')} ${dataInfo?.version || 'N/A'}`}
+              detail={`${freshnessLabel} | ${dataInfo?.runtime?.refresh_status?.last_success_source || 'no-source'}`}
               t={t}
             />
             <StatusRow
@@ -114,6 +148,32 @@ const ServiceStatus = () => {
               detail={`${t('serviceModel')} ${aiInfo?.model || 'N/A'}`}
               t={t}
             />
+            <StatusRow
+              label="Prediction Service"
+              status={predictionStatus}
+              detail={`${predictionInfo?.runtime?.available_models?.length || 0} models`}
+              t={t}
+            />
+
+            {sourceRows.length > 0 && (
+              <div className="status-row">
+                <div>
+                  <div className="status-label">Data Sources</div>
+                  <div className="status-detail">
+                    {sourceRows
+                      .map((item) => {
+                        const state = item?.success ? 'ok' : 'fail';
+                        const latency = item?.latency_ms ? `${Math.round(item.latency_ms)}ms` : 'n/a';
+                        return `${item?.source || 'unknown'}:${state}:${latency}`;
+                      })
+                      .join(' | ')}
+                  </div>
+                </div>
+                <Badge bg={freshness?.is_live ? 'success' : 'warning'}>
+                  {freshness?.quote_timestamp || 'no-ts'}
+                </Badge>
+              </div>
+            )}
 
             <div className="service-fab-time">
               {t('serviceLastCheck')}: {lastCheck ? lastCheck.toLocaleTimeString() : t('serviceNeverChecked')}

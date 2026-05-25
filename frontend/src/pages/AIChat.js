@@ -19,7 +19,7 @@ const AIChat = () => {
       {
         id: Date.now(),
         content: isEnglish
-          ? 'Hello, I am your AI investment assistant. You can ask me about stock trends, risk, strategy backtests, and position suggestions.'
+          ? 'Hello, I am your AI investment assistant. Ask me about stock trends, risk, strategy backtests, and position sizing.'
           : '你好，我是你的 AI 投资助手。你可以直接问我股票趋势、风险、策略回测和仓位建议。',
         type: 'ai',
         timestamp: new Date(),
@@ -76,7 +76,12 @@ const AIChat = () => {
     <Container className="ai-chat-page py-3 py-md-4">
       <Card className="ai-chat-shell">
         <Card.Header className="ai-chat-header">
-          <PageLogo title="AI Assistant" subtitle="Conversational Research" glyph="Q" tone="teal" />
+          <PageLogo
+            title={isEnglish ? 'AI Assistant' : 'AI 助手'}
+            subtitle={isEnglish ? 'Conversational research workspace' : '对话式研究工作台'}
+            glyph="Q"
+            tone="blue"
+          />
           <div className="ai-chat-title mt-2">{isEnglish ? 'AI Investment Assistant' : 'AI 投资助手'}</div>
           <div className="ai-chat-subtitle">
             {isEnglish ? 'Supports stock analysis, strategy suggestions, and risk judgment' : '支持股票分析、策略建议和风险判断'}

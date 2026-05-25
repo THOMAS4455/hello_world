@@ -41,6 +41,48 @@ class TestIntegration:
         assert "version" in data
         assert "timestamp" in data
 
+    def test_stocks_data_health_endpoint(self, client, monkeypatch):
+        monkeypatch.setattr(
+            app_module.data_service,
+            "get_data_health",
+            lambda: {
+                "live_only": True,
+                "stock_source": "aggregate_realtime",
+                "healthy_sources": 2,
+                "total_sources": 3,
+                "source_health": {"eastmoney_direct": {"success": True}},
+            },
+        )
+
+        response = client.get("/api/stocks/data-health")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["success"] is True
+        assert payload["data"]["live_only"] is True
+        assert payload["data"]["healthy_sources"] == 2
+
+    def test_predict_post_with_body(self, client, monkeypatch):
+        monkeypatch.setattr(
+            app_module.prediction_service,
+            "predict_stock",
+            lambda symbol, horizon, up_threshold: {
+                "symbol": symbol,
+                "horizon": horizon,
+                "up_threshold": up_threshold,
+                "prediction": 1,
+                "direction": "up",
+                "confidence": 0.81,
+            },
+        )
+
+        response = client.post(
+            "/api/predictions/predict",
+            json={"symbol": "000001", "horizon": 5, "up_threshold": 0.02},
+        )
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+        assert response.json()["data"]["symbol"] == "000001"
+
     def test_stocks_api_endpoint(self, client, monkeypatch):
         fake_stocks_payload = {
             "success": True,
@@ -56,7 +98,7 @@ class TestIntegration:
                 ]
             },
         }
-        monkeypatch.setattr(app_module.data_service, "get_stocks", lambda: fake_stocks_payload)
+        monkeypatch.setattr(app_module.data_service, "get_stocks", lambda *args, **kwargs: fake_stocks_payload)
 
         response = client.get("/api/stocks")
         assert response.status_code == 200
@@ -157,6 +199,146 @@ class TestIntegration:
         )
         assert expired_profile.status_code == 200
         assert expired_profile.json()["success"] is False
+
+    def test_profile_and_settings_update(self, client, isolated_auth_storage):
+        client.post(
+            "/api/auth/register",
+            json={"username": "operator", "email": "operator@example.com", "password": "secret123"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"username": "operator", "password": "secret123"},
+        )
+        token = login_response.json()["data"]["token"]
+
+        profile_response = client.put(
+            "/api/user/profile",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"profile": {"phone": "123456", "company": "OpenAI", "bio": "tester"}},
+        )
+        assert profile_response.status_code == 200
+        assert profile_response.json()["success"] is True
+        assert profile_response.json()["data"]["user"]["profile"]["company"] == "OpenAI"
+
+        settings_response = client.put(
+            "/api/user/settings",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"settings": {"theme": "dark", "language": "en-US"}},
+        )
+        assert settings_response.status_code == 200
+        assert settings_response.json()["success"] is True
+        assert settings_response.json()["data"]["user"]["settings"]["theme"] == "dark"
+
+    def test_system_health_contains_runtime(self, client, monkeypatch):
+        monkeypatch.setattr(app_module.ai_service, "get_service_status", lambda: {"status": "online", "model": "demo"})
+        monkeypatch.setattr(app_module.ai_service, "get_runtime_config", lambda: {"model": "demo"})
+        monkeypatch.setattr(
+            app_module.data_service,
+            "get_data_source_config",
+            lambda: {"stock_source": "aggregate_realtime", "refresh_status": {"last_success_source": "direct_sina"}},
+        )
+        monkeypatch.setattr(
+            app_module.prediction_service,
+            "get_model_info",
+            lambda: {"available_models": ["m1", "m2"], "model_status": "ready"},
+        )
+
+        response = client.get("/api/system/health")
+        assert response.status_code == 200
+        payload = response.json()["data"]
+        assert "runtime" in payload
+        assert payload["components"]["data_service"]["runtime"]["stock_source"] == "aggregate_realtime"
+        assert payload["components"]["prediction_service"]["runtime"]["model_status"] == "ready"
+
+    def test_prediction_history_endpoints(self, client, monkeypatch):
+        monkeypatch.setattr(
+            app_module.prediction_service,
+            "predict_stock",
+            lambda symbol, horizon, up_threshold: {
+                "symbol": symbol,
+                "horizon": horizon,
+                "up_threshold": up_threshold,
+                "prediction": 1,
+                "direction": "up",
+                "confidence": 0.81,
+                "individual_predictions": {"m1": 1},
+                "probabilities": {"m1": {"up": 0.81, "down": 0.19}},
+                "model_scores": {},
+                "layer_outputs": {},
+                "explanation": "demo forecast",
+                "timestamp": 123456.0,
+            },
+        )
+        monkeypatch.setattr(
+            app_module.prediction_service,
+            "backtest_strategy",
+            lambda symbol, strategy, horizon, test_size, up_threshold, min_confidence=0.0: {
+                "symbol": symbol,
+                "strategy": strategy,
+                "horizon": horizon,
+                "up_threshold": up_threshold,
+                "min_confidence": min_confidence,
+                "test_ratio": test_size,
+                "period": "100 days",
+                "results": {"walk_forward": {"accuracy": 0.61, "samples": 42}},
+                "baseline_accuracy": 0.55,
+                "improvement": 0.06,
+                "feature_importance": {},
+                "sentiment_comparison": {},
+                "walk_forward": {"accuracy": 0.61, "samples": 42},
+                "timestamp": 123457.0,
+            },
+        )
+        monkeypatch.setattr(
+            app_module.prediction_service,
+            "get_prediction_history",
+            lambda symbol=None, limit=20: [{"id": "pred-1", "symbol": "000001", "direction": "up", "confidence": 0.81}],
+        )
+        monkeypatch.setattr(
+            app_module.prediction_service,
+            "get_backtest_history",
+            lambda symbol=None, limit=20: [{"id": "back-1", "symbol": "000001", "strategy": "default", "improvement": 0.06}],
+        )
+        monkeypatch.setattr(
+            app_module.prediction_service,
+            "get_prediction_run",
+            lambda run_id: {"id": run_id, "result": {"symbol": "000001", "horizon": 5, "up_threshold": 0.02}},
+        )
+        monkeypatch.setattr(
+            app_module.prediction_service,
+            "get_backtest_run",
+            lambda run_id: {"id": run_id, "result": {"symbol": "000001", "strategy": "default", "test_ratio": 0.2}},
+        )
+
+        predict_response = client.get("/api/predictions/predict", params={"symbol": "000001", "horizon": 5})
+        assert predict_response.status_code == 200
+        assert predict_response.json()["success"] is True
+
+        history_response = client.get("/api/predictions/history", params={"symbol": "000001", "limit": 5})
+        assert history_response.status_code == 200
+        assert history_response.json()["success"] is True
+        assert history_response.json()["data"]["items"][0]["symbol"] == "000001"
+        assert history_response.json()["data"]["items"][0]["id"] == "pred-1"
+
+        run_response = client.get("/api/predictions/history/pred-1")
+        assert run_response.status_code == 200
+        assert run_response.json()["success"] is True
+        assert run_response.json()["data"]["item"]["result"]["symbol"] == "000001"
+
+        backtest_response = client.post("/api/predictions/backtest", params={"symbol": "000001"})
+        assert backtest_response.status_code == 200
+        assert backtest_response.json()["success"] is True
+
+        backtest_history_response = client.get("/api/predictions/backtest-history", params={"symbol": "000001", "limit": 5})
+        assert backtest_history_response.status_code == 200
+        assert backtest_history_response.json()["success"] is True
+        assert backtest_history_response.json()["data"]["items"][0]["strategy"] == "default"
+        assert backtest_history_response.json()["data"]["items"][0]["id"] == "back-1"
+
+        backtest_run_response = client.get("/api/predictions/backtest-history/back-1")
+        assert backtest_run_response.status_code == 200
+        assert backtest_run_response.json()["success"] is True
+        assert backtest_run_response.json()["data"]["item"]["result"]["strategy"] == "default"
 
     def test_cors_headers(self, client):
         response = client.options(

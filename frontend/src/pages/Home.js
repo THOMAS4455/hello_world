@@ -13,7 +13,7 @@ const Home = () => {
   const [keyword, setKeyword] = useState('');
   const [newsLimit, setNewsLimit] = useState(80);
   const [useSina, setUseSina] = useState(true);
-  const [useAkshare, setUseAkshare] = useState(false);
+  const [useAkshare, setUseAkshare] = useState(true);
   const [newsItems, setNewsItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -92,7 +92,12 @@ const Home = () => {
     <div className="analysis-page home-page">
       <section className="home-hero mb-4">
         <div className="home-hero-main">
-          <PageLogo title="AlphaScope Live" subtitle="Market intelligence workspace" glyph="S" tone="blue" />
+          <PageLogo
+            title={isEnglish ? 'AlphaScope Live' : 'AlphaScope 实时'}
+            subtitle={isEnglish ? 'Market intelligence workspace' : '市场情报工作台'}
+            glyph="S"
+            tone="blue"
+          />
           <Badge>Market Research Desk</Badge>
           <h1>{isEnglish ? 'A focused workspace for pre-trade research.' : '面向交易前研究的专注工作台。'}</h1>
           <p>
@@ -106,6 +111,9 @@ const Home = () => {
             </Button>
             <Button variant="outline-primary" onClick={() => navigate('/predictions')}>
               {isEnglish ? 'Run Forecasts' : '进入预测模块'}
+            </Button>
+            <Button variant="outline-light" onClick={() => navigate('/guide')}>
+              {isEnglish ? 'User Guide' : '使用指南'}
             </Button>
           </div>
         </div>

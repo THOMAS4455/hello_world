@@ -60,7 +60,7 @@ const MarketSentiment = () => {
       if (useSina) sources.push('sina');
       if (useAkshare) sources.push('akshare');
       if (sources.length === 0) {
-        setError(isEnglish ? 'Please select at least one news source.' : '至少选择一个新闻来源');
+        setError(isEnglish ? 'Please select at least one news source.' : '请至少选择一个新闻来源。');
         return;
       }
 
@@ -76,7 +76,7 @@ const MarketSentiment = () => {
         setResult(payload);
       } catch (err) {
         setResult(null);
-        setError(err?.message || (isEnglish ? 'Failed to load market sentiment.' : '加载市场情绪失败'));
+        setError(err?.message || (isEnglish ? 'Failed to load market sentiment.' : '加载市场情绪失败。'));
       } finally {
         setLoading(false);
       }
@@ -132,12 +132,18 @@ const MarketSentiment = () => {
   return (
     <div className="analysis-page sentiment-page">
       <div className="sentiment-header">
-        <PageLogo title="Sentiment Radar" subtitle="News + Breadth + AI" glyph="M" tone="rose" />
-        <h1 className="mb-2">{isEnglish ? 'Market Sentiment Analysis' : '市场情绪分析'}</h1>
-        <p className="text-muted mb-0">
+        <PageLogo
+          title={isEnglish ? 'Sentiment Radar' : '情绪雷达'}
+          subtitle={isEnglish ? 'News, breadth, and AI signals' : '新闻、广度与 AI 信号'}
+          glyph="M"
+          tone="blue"
+        />
+        <div className="analysis-workspace-tag">{isEnglish ? 'Sentiment Console' : '情绪控制台'}</div>
+        <h1>{isEnglish ? 'Market sentiment workspace' : '市场情绪工作台'}</h1>
+        <p>
           {isEnglish
-            ? 'Blend broad news crawling, keyword filtering, and stock-specific context into an actionable sentiment view.'
-            : '支持大样本新闻抓取、定向关键词过滤与个股联动评估，输出可执行的情绪结论。'}
+            ? 'Blend broad news crawling, keyword filtering, and stock-specific context into an operational sentiment view.'
+            : '把大范围新闻抓取、关键词过滤和个股上下文结合起来，形成可执行的情绪工作视图。'}
         </p>
       </div>
 
@@ -147,7 +153,7 @@ const MarketSentiment = () => {
             <Col md={3}>
               <Form.Group>
                 <Form.Label>{isEnglish ? 'Stock Symbol' : '股票代码'}</Form.Label>
-                <Form.Control value={symbolInput} onChange={(e) => setSymbolInput(e.target.value)} placeholder={isEnglish ? 'For example: 600519' : '如：600519'} />
+                <Form.Control value={symbolInput} onChange={(e) => setSymbolInput(e.target.value)} placeholder={isEnglish ? 'For example: 600519' : '例如：600519'} />
               </Form.Group>
             </Col>
             <Col md={3}>
@@ -178,8 +184,8 @@ const MarketSentiment = () => {
             </Col>
             <Col md={2}>
               <Form.Group>
-                <Form.Label>{isEnglish ? 'Keyword Filter' : '定向关键词'}</Form.Label>
-                <Form.Control value={keywordInput} onChange={(e) => setKeywordInput(e.target.value)} placeholder={isEnglish ? 'For example: semiconductor' : '如：半导体'} />
+                <Form.Label>{isEnglish ? 'Keyword Filter' : '关键词过滤'}</Form.Label>
+                <Form.Control value={keywordInput} onChange={(e) => setKeywordInput(e.target.value)} placeholder={isEnglish ? 'For example: semiconductor' : '例如：半导体'} />
               </Form.Group>
             </Col>
             <Col md={2}>
@@ -205,7 +211,7 @@ const MarketSentiment = () => {
                   {isEnglish ? 'Analyzing...' : '分析中...'}
                 </>
               ) : (
-                isEnglish ? 'Run Analysis' : '开始分析'
+                isEnglish ? 'Run Analysis' : '运行分析'
               )}
             </Button>
             <Button variant="outline-secondary" onClick={() => { setSymbolInput(''); fetchSentiment('', true); }} disabled={loading}>
@@ -220,19 +226,19 @@ const MarketSentiment = () => {
       {result && (
         <>
           <DecisionCard
-            title={isEnglish ? 'Unified Sentiment Conclusion' : '情绪统一结论'}
+            title={isEnglish ? 'Unified Sentiment Conclusion' : '统一情绪结论'}
             summary={
               isEnglish
-                ? `The current market mood is "${scoreLabel(score)}" with a composite score of ${score.toFixed(4)}. Validate this sentiment signal together with strategy backtests before taking action.`
-                : `当前市场情绪为“${scoreLabel(score)}”，综合分数 ${score.toFixed(4)}。建议将情绪信号与策略回测同时验证后再执行交易。`
+                ? `The current market mood is "${scoreLabel(score)}" with a composite score of ${score.toFixed(4)}. Treat this as a positioning factor and confirm it with strategy evidence before acting.`
+                : `当前市场情绪为“${scoreLabel(score)}”，综合分数为 ${score.toFixed(4)}。建议将它作为仓位调整因子，并结合策略证据后再执行。`
             }
             direction={direction}
             confidence={confidence}
             quality={quality}
             riskNote={
               isEnglish
-                ? 'Sentiment reacts quickly to event shocks. Use it as a position-adjustment factor rather than a standalone entry trigger.'
-                : '情绪受事件冲击影响较快，建议将情绪信号作为仓位调整因子，而不单独作为开仓依据。'
+                ? 'Sentiment reacts quickly to event shocks. It works better as a filter or sizing factor than as a standalone trigger.'
+                : '情绪对事件冲击反应很快，更适合作为过滤器或仓位因子，而不是单独的入场触发器。'
             }
             evidence={[
               { label: isEnglish ? 'Market Score' : '市场分数', value: score.toFixed(4) },
@@ -255,7 +261,7 @@ const MarketSentiment = () => {
                 <Card.Header>{isEnglish ? 'News Sample' : '新闻样本'}</Card.Header>
                 <Card.Body>
                   {(news.news_samples || []).length === 0 ? (
-                    <div className="text-muted">{isEnglish ? 'No news samples available.' : '暂无新闻样本'}</div>
+                    <div className="text-muted">{isEnglish ? 'No news samples available.' : '暂无新闻样本。'}</div>
                   ) : (
                     <div className="home-news-list">
                       {news.news_samples.map((item, idx) => (

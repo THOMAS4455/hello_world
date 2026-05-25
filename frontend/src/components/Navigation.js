@@ -15,7 +15,8 @@ const Navigation = () => {
   const username = useSelector((state) => state?.auth?.user?.username || '');
   const roles = useSelector((state) => state?.auth?.roles || []);
   const isAdmin = Array.isArray(roles) && roles.some((role) => String(role).toLowerCase() === 'admin');
-  const { t } = useAppI18n();
+  const { language, t } = useAppI18n();
+  const isEnglish = language === 'en-US';
   const [logoutSession] = useLogoutSessionMutation();
 
   const handleLogout = async () => {
@@ -32,7 +33,13 @@ const Navigation = () => {
     <Navbar expand="lg" fixed="top" className="main-navbar">
       <Container fluid="xl">
         <Navbar.Brand as={NavLink} to="/" className="brand-text">
-          <PageLogo title="AlphaScope" subtitle="Research Workspace" glyph="A" tone="blue" compact />
+          <PageLogo
+            title="AlphaScope"
+            subtitle={isEnglish ? 'Research Workspace' : '研究工作台'}
+            glyph="A"
+            tone="blue"
+            compact
+          />
           <Badge className="brand-beta">BETA</Badge>
         </Navbar.Brand>
         <Navbar.Toggle aria-controls="main-navbar-nav" />
@@ -43,6 +50,9 @@ const Navigation = () => {
             </Nav.Link>
             <Nav.Link as={NavLink} to="/dashboard">
               {t('navDashboard')}
+            </Nav.Link>
+            <Nav.Link as={NavLink} to="/guide">
+              {t('navGuide', 'Guide')}
             </Nav.Link>
             <Nav.Link as={NavLink} to="/predictions">
               {t('navPredictions')}
@@ -75,6 +85,12 @@ const Navigation = () => {
                     {t('navAdmin')}
                   </Nav.Link>
                 )}
+                <Nav.Link as={NavLink} to="/profile">
+                  {t('navProfile')}
+                </Nav.Link>
+                <Nav.Link as={NavLink} to="/settings">
+                  {t('navSettings', 'Settings')}
+                </Nav.Link>
                 <div className="nav-user">{username ? username : t('navProfile')}</div>
                 <Button variant="outline-light" size="sm" onClick={handleLogout} className="logout-btn">
                   {t('navLogout')}

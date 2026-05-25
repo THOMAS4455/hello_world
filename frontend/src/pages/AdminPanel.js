@@ -51,7 +51,7 @@ const AdminPanel = () => {
     max_tokens: 2000,
     temperature: 0.7,
   });
-  const [dataSourceForm, setDataSourceForm] = useState({ stock_source: 'akshare_em' });
+  const [dataSourceForm, setDataSourceForm] = useState({ stock_source: 'aggregate_realtime' });
   const [saveMsg, setSaveMsg] = useState('');
   const [saveErr, setSaveErr] = useState('');
 
@@ -70,7 +70,7 @@ const AdminPanel = () => {
       temperature: Number(ai.temperature || prev.temperature),
     }));
     setDataSourceForm({
-      stock_source: ds.stock_source || 'akshare_em',
+      stock_source: ds.stock_source || 'aggregate_realtime',
     });
   }, [cfgResp]);
 
@@ -86,6 +86,9 @@ const AdminPanel = () => {
   const dbInfo = dbResp?.data || {};
   const files = dbInfo?.files || [];
   const availableSources = cfgResp?.data?.data_source?.available_stock_sources || [];
+  const sourceHealth = cfgResp?.data?.data_source?.source_health || {};
+  const refreshStatus = cfgResp?.data?.data_source?.refresh_status || {};
+  const sourceHealthRows = Object.entries(sourceHealth).sort(([a], [b]) => a.localeCompare(b));
   const aiMasked = cfgResp?.data?.ai?.api_key_masked || '';
 
   const onSaveSystemConfig = async () => {
@@ -261,6 +264,48 @@ const AdminPanel = () => {
           {t('adminRefreshConfig')}
         </Button>
       </div>
+
+      {sourceHealthRows.length > 0 && (
+        <Card className="mb-3 admin-card">
+          <Card.Header>{t('adminSourceHealth')}</Card.Header>
+          <Card.Body className="p-0">
+            <div className="small text-muted px-3 pt-3 pb-2">
+              {t('adminLastSuccess')}: {refreshStatus.last_success_at || '-'}
+              {' · '}
+              {t('adminLastError')}: {refreshStatus.last_error || '-'}
+              {' · '}
+              {t('adminHealthySources')}:{' '}
+              {sourceHealthRows.filter(([, item]) => item?.success).length}/{sourceHealthRows.length}
+            </div>
+            <div className="table-responsive">
+              <Table striped bordered hover size="sm" className="mb-0">
+                <thead>
+                  <tr>
+                    <th>{t('dashboardSourceName')}</th>
+                    <th>{t('dashboardSourceStatus')}</th>
+                    <th>{t('dashboardSourceLatency')}</th>
+                    <th>{t('dashboardSourceItems')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sourceHealthRows.map(([source, item]) => (
+                    <tr key={source}>
+                      <td>{source}</td>
+                      <td>
+                        <Badge bg={item?.success ? 'success' : 'danger'}>
+                          {item?.success ? t('dashboardHealthy') : t('dashboardUnhealthy')}
+                        </Badge>
+                      </td>
+                      <td>{item?.latency_ms ?? '-'}</td>
+                      <td>{item?.item_count ?? '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </div>
+          </Card.Body>
+        </Card>
+      )}
 
       <Row className="g-3">
         <Col lg={7}>

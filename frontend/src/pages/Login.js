@@ -60,31 +60,31 @@ const Login = () => {
           <Col lg={6} className="d-flex">
             <Card className="auth-side-card w-100">
               <Card.Body>
-                <PageLogo title="AlphaScope" subtitle="Secure Sign-in" glyph="L" tone="orange" compact />
+                <PageLogo title="AlphaScope" subtitle={isEnglish ? 'Secure sign-in' : '安全登录'} glyph="L" tone="blue" compact />
                 <div className="auth-side-tag">
-                  {isEnglish ? 'Intelligent Research Platform' : '智能投研平台'}
+                  {isEnglish ? 'Research Workspace Access' : '研究工作台入口'}
                 </div>
                 <h1 className="auth-side-title">{isEnglish ? 'Welcome back' : '欢迎回来'}</h1>
                 <p className="auth-side-text">
                   {isEnglish
-                    ? 'After logging in, you can continue using forecasts, backtests, and sentiment tools while keeping your personal settings synced.'
-                    : '登录后可以继续使用预测、回测和市场情绪工具，同时保留你的个人设置与分析偏好。'}
+                    ? 'Sign in to continue using forecasts, backtests, sentiment analysis, and your saved workspace settings.'
+                    : '登录后继续使用预测、回测、情绪分析，以及你保存的工作区设置。'}
                 </p>
                 <div className="auth-side-points">
                   <div>
                     {isEnglish
-                      ? 'Realtime quotes linked with market-wide data'
-                      : '实时行情与全市场数据联动'}
+                      ? 'Realtime quotes linked with market-wide context'
+                      : '实时行情与全市场上下文联动'}
                   </div>
                   <div>
                     {isEnglish
-                      ? 'Visualized multi-model forecasts and backtests'
-                      : '多模型预测与回测结果可视化'}
+                      ? 'Multi-model forecasts and validation views'
+                      : '多模型预测与验证视图'}
                   </div>
                   <div>
                     {isEnglish
-                      ? 'Sentiment capture with keyword targeting'
-                      : '支持按关键词定向抓取市场情绪'}
+                      ? 'One account state across the full workflow'
+                      : '在完整分析链路中共享同一账户状态'}
                   </div>
                 </div>
               </Card.Body>
@@ -94,7 +94,7 @@ const Login = () => {
           <Col lg={6} className="d-flex">
             <Card className="auth-form-card w-100">
               <Card.Body>
-                <PageLogo title="Login" subtitle="Account Access" glyph="L" tone="blue" compact />
+                <PageLogo title={isEnglish ? 'Login' : '登录'} subtitle={isEnglish ? 'Account access' : '账户访问'} glyph="L" tone="blue" compact />
                 <h2 className="auth-form-title">{isEnglish ? 'Login to your account' : '登录账户'}</h2>
                 <p className="auth-form-subtitle">
                   {isEnglish ? 'Sign in with your username or email' : '支持用户名或邮箱登录'}
@@ -138,7 +138,7 @@ const Login = () => {
                 </Form>
 
                 <div className="auth-footer">
-                  {isEnglish ? "Don't have an account? " : '还没有账号？'}
+                  {isEnglish ? "Don't have an account? " : '还没有账户？'}
                   <Link to="/register">{isEnglish ? 'Register now' : '立即注册'}</Link>
                 </div>
               </Card.Body>

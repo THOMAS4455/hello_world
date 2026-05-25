@@ -8,7 +8,7 @@ from __future__ import annotations
 import math
 import statistics
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
@@ -17,6 +17,8 @@ class MarketSentimentService:
     def __init__(self, data_service: Any) -> None:
         self.data_service = data_service
         self.request_timeout = 12
+        self.realtime_news_max_age_hours = 72
+        self.sina_finance_roll_lid = "2509"
         self.positive_words = {
             "上涨",
             "反弹",
@@ -119,6 +121,44 @@ class MarketSentimentService:
             return False
         return any(keyword in text for keyword in self.finance_keywords)
 
+    def _parse_news_timestamp(self, time_text: Any) -> Tuple[str, float]:
+        if time_text is None or time_text == "":
+            return "", 0.0
+
+        if isinstance(time_text, (int, float)):
+            ts = float(time_text)
+            if ts > 1e12:
+                ts /= 1000.0
+            if ts > 0:
+                dt = datetime.fromtimestamp(ts)
+                return dt.strftime("%Y-%m-%d %H:%M:%S"), ts
+
+        text = str(time_text).strip()
+        if not text:
+            return "", 0.0
+
+        if text.isdigit():
+            ts = float(text)
+            if ts > 1e12:
+                ts /= 1000.0
+            if ts > 0:
+                dt = datetime.fromtimestamp(ts)
+                return dt.strftime("%Y-%m-%d %H:%M:%S"), ts
+
+        for fmt in (
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d %H:%M",
+            "%Y/%m/%d %H:%M:%S",
+            "%Y/%m/%d %H:%M",
+        ):
+            try:
+                dt = datetime.strptime(text, fmt)
+                return dt.strftime("%Y-%m-%d %H:%M:%S"), dt.timestamp()
+            except ValueError:
+                continue
+
+        return text, 0.0
+
     def _normalize_news_item(
         self,
         *,
@@ -134,11 +174,14 @@ class MarketSentimentService:
         source = str(source or "unknown").strip().lower() or "unknown"
         if url and not url.startswith(("http://", "https://")):
             url = ""
+        display_time, timestamp = self._parse_news_timestamp(time_text)
         return {
             "title": title,
             "url": url,
             "source": source,
-            "time": str(time_text or "").strip(),
+            "time": display_time,
+            "published_at": display_time,
+            "timestamp": timestamp,
             "is_clickable": bool(url),
         }
 
@@ -217,7 +260,7 @@ class MarketSentimentService:
         for page in range(1, pages + 1):
             params = {
                 "pageid": "153",
-                "lid": "2510",
+                "lid": self.sina_finance_roll_lid,
                 "k": keyword or "",
                 "num": page_size,
                 "page": str(page),
@@ -268,23 +311,49 @@ class MarketSentimentService:
         news: List[Dict[str, Any]] = []
         for _, row in df.head(max(10, min(limit * 3, 120))).iterrows():
             row_dict = row.to_dict()
-            title = self._first_present(row_dict, "标题", "鏍囬")
-            if not self._is_finance_relevant(str(title)):
+            title = self._first_present(row_dict, "标题", "title")
+            if not title:
                 continue
-            source = self._first_present(row_dict, "来源", "鏉ユ簮", default="eastmoney")
-            time_text = self._first_present(row_dict, "发布时间", "发布时间", "鍙戝竷鏃堕棿")
+            time_text = self._first_present(row_dict, "发布时间", "时间")
             url = self._first_present(row_dict, "链接", "资讯链接", "url", "URL")
+            summary = self._first_present(row_dict, "摘要", "summary")
             news_item = self._normalize_news_item(
                 title=title,
                 url=url,
-                source=source,
+                source="eastmoney",
                 time_text=time_text,
             )
             if news_item:
+                if summary:
+                    news_item["summary"] = str(summary).strip()
                 news.append(news_item)
             if len(news) >= limit:
                 break
         return news
+
+    def _filter_and_sort_news(self, items: List[Dict[str, Any]], limit: int) -> List[Dict[str, Any]]:
+        cutoff = datetime.now().timestamp() - self.realtime_news_max_age_hours * 3600
+        fresh: List[Dict[str, Any]] = []
+        unknown_time: List[Dict[str, Any]] = []
+
+        for item in items:
+            ts = float(item.get("timestamp") or 0.0)
+            if ts <= 0:
+                unknown_time.append(item)
+            elif ts >= cutoff:
+                fresh.append(item)
+
+        ranked = fresh if fresh else items
+        if fresh and unknown_time:
+            ranked = fresh + unknown_time
+
+        ranked.sort(
+            key=lambda item: (
+                -float(item.get("timestamp") or 0.0),
+                0 if item.get("is_clickable") else 1,
+            )
+        )
+        return ranked[:limit]
 
     def _fetch_finance_news(
         self,
@@ -297,10 +366,10 @@ class MarketSentimentService:
         source_set = set(sources or ["sina", "akshare"])
 
         fetchers: List[tuple[str, Any]] = []
-        if "sina" in source_set:
-            fetchers.append(("sina", lambda limit: self._fetch_sina_finance_news_paged(limit=limit, keyword=None)))
         if "akshare" in source_set:
             fetchers.append(("akshare", self._fetch_akshare_finance_news))
+        if "sina" in source_set:
+            fetchers.append(("sina", lambda limit: self._fetch_sina_finance_news_paged(limit=limit, keyword=None)))
         if not fetchers:
             raise Exception("No available news sources configured")
 
@@ -327,8 +396,7 @@ class MarketSentimentService:
             detail = " | ".join(errors) if errors else "all configured sources returned no usable news"
             raise Exception("Failed to fetch online finance news: " + detail)
 
-        merged.sort(key=lambda item: (0 if item.get("is_clickable") else 1, item.get("time", "")))
-        return merged[:limit]
+        return self._filter_and_sort_news(merged, limit)
 
     def _compute_news_sentiment(self, news_items: List[Dict[str, Any]]) -> Dict[str, Any]:
         if not news_items:
