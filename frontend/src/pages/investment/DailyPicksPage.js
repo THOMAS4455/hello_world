@@ -59,7 +59,9 @@ const DailyPicksPage = () => {
 
   useEffect(() => {
     loadLatest();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Intentionally runs once on mount. (The previous eslint-disable directive
+    // referenced react-hooks/exhaustive-deps, which is not resolvable in this
+    // dependency tree and therefore failed the production build outright.)
   }, []);
 
   const list = picks?.picks || [];
