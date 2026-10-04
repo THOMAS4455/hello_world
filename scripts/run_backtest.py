@@ -119,6 +119,7 @@ def run_pipeline(
 
     predictor = ImprovedPredictor(learn_weights=False)
     _features = predictor.prepare_features(df)
+    predictor.adopt_prepared_features()
     n_features = len(predictor.feature_columns)
 
     # Train

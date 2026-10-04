@@ -65,7 +65,10 @@ class TestPurgedSplit:
         assert result["test_size"] > 0
         assert "ensemble" in result["results"]
         assert 0.0 <= result["results"]["ensemble"]["accuracy"] <= 1.0
-        assert result.get("decision_threshold", 0.5) >= 0.35
+        # _tune_decision_threshold searches np.linspace(0.30, 0.65, 36); the
+        # optimum can legitimately land on the lower bound, so assert the bound
+        # rather than an interior value.
+        assert result.get("decision_threshold", 0.5) >= 0.30
         wf = result["results"].get("walk_forward", {})
         assert wf.get("method") == "ensemble_walk_forward"
         pnl = result.get("pnl_backtest", {})

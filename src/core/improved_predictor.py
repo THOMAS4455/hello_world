@@ -20,7 +20,15 @@ from sklearn.ensemble import (
     RandomForestClassifier,
 )
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, brier_score_loss, f1_score, precision_score, recall_score
+from sklearn.metrics import (
+    accuracy_score,
+    balanced_accuracy_score,
+    brier_score_loss,
+    f1_score,
+    matthews_corrcoef,
+    precision_score,
+    recall_score,
+)
 from sklearn.model_selection import TimeSeriesSplit, cross_val_score
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
@@ -79,16 +87,24 @@ def align_features_and_labels(
 
 
 class ImprovedPredictor:
-    def __init__(self, learn_weights: bool = True) -> None:
+    def __init__(self, learn_weights: bool = True, feature_selection: bool = False) -> None:
         """
         Initialize ImprovedPredictor with weight learning and LSTM support
-        
+
         Args:
             learn_weights: If True, learn ensemble weights from validation data (recommended).
                           If False, use fixed weights (0.35, 0.40, 0.25).
+            feature_selection: If True, prune low-importance features BEFORE fitting.
+                          Off by default: the previous post-fit pruning was dead code
+                          (prepare_features() rewrote self.feature_columns on every
+                          predict call, silently undoing it) and no ablation showed a
+                          gain from it.
         """
         # Weight learning configuration
         self.learn_weights = learn_weights
+        self.feature_selection = bool(feature_selection)
+        # Columns actually used at inference. Set by train(), consumed by predict().
+        self.inference_columns: List[str] = []
         self.within_layer_weights: Dict[str, Dict[str, float]] = {}
         self.learned_layer_weights: Dict[str, float] = {}
         
@@ -221,6 +237,10 @@ class ImprovedPredictor:
         }
         self.scaler = StandardScaler()
         self.feature_columns: List[str] = []
+        # Every feature produced by the last prepare_features() call. Kept separate
+        # from feature_columns so inference/backtest code can never silently undo a
+        # trained pruning decision.
+        self.available_feature_columns: List[str] = []
         self.is_trained = False
         self.model_scores: Dict[str, Dict[str, float]] = {}
         self.layer_weights = {"baseline": 0.35, "enhanced": 0.4, "regime": 0.25}
@@ -383,16 +403,18 @@ class ImprovedPredictor:
         cross_cols = [col for col in cross_cols if col in features.columns]
         microstructure_cols = [col for col in microstructure_cols if col in features.columns]
         
-        self.feature_columns = base_columns + time_series_cols + cross_cols + microstructure_cols
-        
+        self.available_feature_columns = (
+            base_columns + time_series_cols + cross_cols + microstructure_cols
+        )
+
         # Fill NaN values in feature columns
         # Strategy: forward fill first, then backward fill, then fill with 0
-        for col in self.feature_columns:
+        for col in self.available_feature_columns:
             if col in features.columns:
                 features[col] = features[col].fillna(method='ffill').fillna(method='bfill').fillna(0)
-        
+
         # Drop remaining rows where feature columns still have NaN (should be rare now)
-        features = features.dropna(subset=self.feature_columns)
+        features = features.dropna(subset=self.available_feature_columns)
         
         return features
 
@@ -501,6 +523,18 @@ class ImprovedPredictor:
         
         return features
 
+    def adopt_prepared_features(self) -> List[str]:
+        """Adopt every feature produced by the last prepare_features() call.
+
+        prepare_features() used to write self.feature_columns directly, which
+        silently undid any trained pruning the moment predict() ran. Now callers
+        opt in explicitly via this method.
+        """
+        available = list(getattr(self, "available_feature_columns", []) or [])
+        if available:
+            self.feature_columns = available
+        return self.feature_columns
+
     def prepare_labels(
         self, df: pd.DataFrame, horizon: int = 5, up_threshold: float = 0.02,
         stop_loss_pct: float | None = None, label_method: str = "fixed_horizon",
@@ -585,10 +619,48 @@ class ImprovedPredictor:
             return "bear"
         return "range"
 
+    @staticmethod
+    def walk_forward_folds(
+        total_n: int, n_folds: int, test_size_per_fold: float, horizon: int
+    ):
+        """Yield purged expanding-window folds.
+
+        Each item is (train_start, train_end, test_start, test_end). Shared by
+        backtest_multi_fold and scripts/ablation_edge.py so every variant is
+        compared on exactly the same out-of-sample windows. An embargo of
+        horizon rows between train and test prevents label leakage across the
+        boundary.
+        """
+        fold_size = int(total_n * test_size_per_fold)
+        embargo = int(horizon)
+        for fold in range(int(n_folds)):
+            test_end = total_n - (int(n_folds) - 1 - fold) * fold_size
+            test_start = test_end - fold_size
+            train_end = max(0, test_start - embargo)
+            if test_start <= 0 or test_end <= test_start:
+                continue
+            yield 0, train_end, test_start, test_end
+
     def _eval_metrics(self, y_true, y_pred) -> Dict[str, float]:
-        """Overall accuracy; precision/recall/F1 for positive class (1 = future up)."""
+        """Accuracy plus the metrics that are actually informative here.
+
+        The fixed-horizon label (1 = "5-day return above +2%") is heavily
+        imbalanced, so a model that always predicts 0 can score 70-90% accuracy.
+        Every report therefore carries the majority-class baseline and
+        EDGE = accuracy - baseline, alongside balanced accuracy and MCC.
+        """
+        y_true_arr = np.asarray(y_true)
+        y_pred_arr = np.asarray(y_pred)
+        accuracy = float(accuracy_score(y_true_arr, y_pred_arr))
+        positives = float(np.mean(y_true_arr == 1)) if len(y_true_arr) else 0.0
+        baseline = max(positives, 1.0 - positives)
         return {
-            "accuracy": float(accuracy_score(y_true, y_pred)),
+            "accuracy": accuracy,
+            "baseline_accuracy": float(baseline),
+            "edge": float(accuracy - baseline),
+            "n_eval": int(len(y_true_arr)),
+            "balanced_accuracy": float(balanced_accuracy_score(y_true_arr, y_pred_arr)),
+            "mcc": float(matthews_corrcoef(y_true_arr, y_pred_arr)),
             "precision": float(
                 precision_score(y_true, y_pred, pos_label=1, zero_division=0)
             ),
@@ -957,6 +1029,7 @@ class ImprovedPredictor:
 
         _cb({"event": "phase", "phase": "prepare_features"})
         features_df = self.prepare_features(df)
+        self.adopt_prepared_features()
         labels = self.prepare_labels(
             features_df, horizon=horizon, up_threshold=up_threshold,
             stop_loss_pct=stop_loss_pct, label_method=label_method,
@@ -984,6 +1057,29 @@ class ImprovedPredictor:
             features_train = features_df
             features_val = None
         
+        # Optional feature pruning. It must happen BEFORE anything is fitted,
+        # otherwise the scaler and every model disagree with the inference matrix.
+        if self.feature_selection and X_val is not None and y_val is not None and len(X_val) >= 50:
+            self._select_features(X_val, y_val, min_features=20)
+            selected = [c for c in self.active_feature_columns if c in features_df.columns]
+            if selected and set(selected) != set(self.feature_columns):
+                self.feature_columns = selected
+                X = features_df[self.feature_columns]
+                X_train = X.iloc[:split_idx]
+                X_val = X.iloc[split_idx:]
+
+        # The hold-out tail feeds several tuning decisions. Split it in two so
+        # ensemble weights and regime thresholds/pruning are not all fitted on the
+        # same rows. Below 100 rows we keep one block rather than starve both.
+        if self.learn_weights and X_val is not None and len(X_val) >= 100:
+            val_mid = split_idx + len(X_val) // 2
+            X_val_w, y_val_w = X.iloc[split_idx:val_mid], y.iloc[split_idx:val_mid]
+            features_val_w = features_df.iloc[split_idx:val_mid]
+            X_val, y_val = X.iloc[val_mid:], y.iloc[val_mid:]
+            features_val = features_df.iloc[val_mid:]
+        else:
+            X_val_w, y_val_w, features_val_w = X_val, y_val, features_val
+
         self.decision_threshold, self.probability_calibrator, _ = self._fit_validation_artifacts(
             X_train, y_train, features_train
         )
@@ -1078,9 +1174,9 @@ class ImprovedPredictor:
             _cb({"event": "lstm_skipped", "reason": "TensorFlow not available or LSTM disabled"})
 
         # Learn optimal weights if enabled
-        if self.learn_weights and X_val is not None and self.weight_optimizer_available:
+        if self.learn_weights and X_val_w is not None and self.weight_optimizer_available:
             _cb({"event": "weights_start"})
-            self._learn_optimal_weights(X_val, y_val, features_val)
+            self._learn_optimal_weights(X_val_w, y_val_w, features_val_w)
             _cb({"event": "weights_done"})
         else:
             _cb({"event": "weights_skipped"})
@@ -1088,14 +1184,10 @@ class ImprovedPredictor:
         # Compute feature importance from tree models
         self._compute_feature_importance()
 
-        # Select useful features per stock (drop noise)
-        if X_val is not None and y_val is not None and len(X_val) >= 50:
-            self._select_features(X_val[self.feature_columns], y_val, min_features=20)
-        else:
-            self._select_features(X_train[self.feature_columns], y_train, min_features=20)
-        dropped = [c for c in self.feature_columns if c not in self.active_feature_columns]
-        if dropped:
-            self.feature_columns = self.active_feature_columns
+        # Freeze the inference contract. prepare_features() rewrites
+        # self.feature_columns on every call, so predict() must read this snapshot
+        # instead -- previously the pruning above was silently undone before use.
+        self.inference_columns = list(self.feature_columns)
 
         # Tune per-regime decision thresholds
         if X_val is not None and y_val is not None:
@@ -1311,7 +1403,8 @@ class ImprovedPredictor:
             raise ValueError("Model is not trained")
 
         features_df = self.prepare_features(df)
-        latest_features = features_df[self.feature_columns].iloc[-1:]
+        columns = list(self.inference_columns or self.feature_columns)
+        latest_features = features_df[columns].iloc[-1:]
         latest_scaled = self.scaler.transform(latest_features.values)
 
         layer_outputs = self._predict_layer_probs(latest_scaled)
@@ -1333,7 +1426,7 @@ class ImprovedPredictor:
         lstm_up = None
         if self.lstm_enabled and self.lstm_model is not None:
             # Get more features for sequence
-            sequence_features = features_df[self.feature_columns].iloc[-self.lstm_model.sequence_length:]
+            sequence_features = features_df[columns].iloc[-self.lstm_model.sequence_length:]
             if len(sequence_features) >= self.lstm_model.sequence_length:
                 sequence_scaled = self.scaler.transform(sequence_features.values)
                 lstm_proba = self.lstm_model.predict_proba(sequence_scaled)
@@ -1665,6 +1758,7 @@ class ImprovedPredictor:
             label_method=label_method,
         )
         features_df, labels = align_features_and_labels(features_df, labels)
+        self.adopt_prepared_features()
         X = features_df[self.feature_columns]
         y = labels
 
@@ -1673,15 +1767,10 @@ class ImprovedPredictor:
         if total_n < 200 or fold_size < 50:
             raise ValueError(f"Data too small for multi-fold: {total_n} rows")
 
-        # Compute fold boundaries: last fold ends at the latest data
         fold_metrics = []
-        for fold in range(n_folds):
-            test_end = total_n - (n_folds - 1 - fold) * fold_size
-            test_start = test_end - fold_size
-            embargo = int(horizon)
-            train_end = max(0, test_start - embargo)
-            train_start = 0  # use all history before the test window
-
+        for fold, (train_start, train_end, test_start, test_end) in enumerate(
+            self.walk_forward_folds(total_n, n_folds, test_size_per_fold, horizon)
+        ):
             if train_end < 80 or test_end - test_start < 30:
                 continue
 
@@ -1715,11 +1804,16 @@ class ImprovedPredictor:
                 constraints=TradingConstraints() if TradingConstraints is not None else None,
             )
 
+            fold_eval = self._eval_metrics(y_test, ensemble_preds)
             fold_metrics.append({
                 "fold": fold,
                 "test_days": test_end - test_start,
                 "train_days": train_end - train_start,
-                "accuracy": float(accuracy_score(y_test, ensemble_preds)),
+                "accuracy": fold_eval["accuracy"],
+                "baseline_accuracy": fold_eval["baseline_accuracy"],
+                "edge": fold_eval["edge"],
+                "balanced_accuracy": fold_eval["balanced_accuracy"],
+                "mcc": fold_eval["mcc"],
                 "sharpe": pnl["sharpe_ratio"],
                 "total_return": pnl["total_return"],
                 "excess_return": pnl["excess_return"],
@@ -1740,6 +1834,10 @@ class ImprovedPredictor:
         wins = [m["win_rate"] for m in fold_metrics]
         sigs = [m["trade_signals"] for m in fold_metrics]
         accs = [m["accuracy"] for m in fold_metrics]
+        edges = [m["edge"] for m in fold_metrics]
+        baselines = [m["baseline_accuracy"] for m in fold_metrics]
+        n_eval_total = int(sum(m["test_days"] for m in fold_metrics))
+        pooled_edge = float(np.mean(accs) - np.mean(baselines))
 
         return {
             "n_folds": len(fold_metrics),
@@ -1748,6 +1846,13 @@ class ImprovedPredictor:
             "horizon": horizon,
             "accuracy_mean": float(np.mean(accs)),
             "accuracy_std": float(np.std(accs, ddof=1)) if len(accs) > 1 else 0.0,
+            # Headline honesty metrics: raw accuracy is dominated by the class
+            # imbalance, so always read it together with the baseline and edge.
+            "baseline_accuracy_mean": float(np.mean(baselines)),
+            "edge_mean": float(np.mean(edges)),
+            "edge_pooled": pooled_edge,
+            "edge_std": float(np.std(edges, ddof=1)) if len(edges) > 1 else 0.0,
+            "n_out_of_sample": n_eval_total,
             "sharpe_mean": float(np.mean(sharpes)),
             "sharpe_std": float(np.std(sharpes, ddof=1)) if len(sharpes) > 1 else 0.0,
             "total_return_mean": float(np.mean(returns)),
@@ -1824,6 +1929,7 @@ class ImprovedPredictor:
             stop_loss_pct=stop_loss_pct, label_method=label_method,
         )
         features_df, labels = align_features_and_labels(features_df, labels)
+        self.adopt_prepared_features()
 
         X = features_df[self.feature_columns]
         y = labels

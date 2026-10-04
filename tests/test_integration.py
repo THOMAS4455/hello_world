@@ -127,13 +127,11 @@ class TestIntegration:
         assert data["success"] is False
         assert "Authorization" in data["message"]
 
-    def test_news_sources_validation(self, client):
+    def test_retired_news_endpoint_is_gone(self, client):
+        # The news/sentiment module was retired; assert the route is really gone
+        # instead of leaving a test that expects a 422 from a non-existent path.
         response = client.get("/api/news/realtime?sources=invalid")
-        assert response.status_code == 422
-
-        data = response.json()
-        assert data["success"] is False
-        assert "allowed_sources" in data["data"]
+        assert response.status_code == 404
 
     def test_register_request_validation(self, client):
         response = client.post(
