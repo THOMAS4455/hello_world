@@ -185,7 +185,7 @@ show_access_info() {
     echo ""
     echo "📊 监控面板:"
     echo "   Prometheus: http://localhost:9090"
-    echo "   Grafana:    http://localhost:3001 (admin/REDACTED)"
+    echo "   Grafana:    http://localhost:3001 (see GF_SECURITY_ADMIN_PASSWORD)"
     echo ""
     echo "🔧 管理命令:"
     echo "   查看日志:   docker-compose logs -f app"
