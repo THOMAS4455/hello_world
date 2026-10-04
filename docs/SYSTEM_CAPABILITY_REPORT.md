@@ -97,3 +97,65 @@
 3. 若以上仍无 alpha → 停止预测投入，聚焦风控层做「指数增强 + 资本保全」。
 
 **诚实声明**：在「散户级数据 + 日线 + 大盘股」约束下，当前未找到稳健 alpha；继续投入前需明确这一点。
+
+---
+
+## 九、2026-10-04 复核补充：指标口径、消融实测与实盘验证
+
+本节全部数字来自本机实测，可复现命令随附。
+
+### 9.1 指标口径变更（重要）
+
+固定视野标签为 `1 = 未来 5 日涨幅 > +2%`，实测多数类占比 52%~90%（34 条回测中位数 71.4%）。
+因此**准确率本身不是能力指标**——「永远猜不会涨」即可拿到 71%。
+本项目现在一律以 **edge = accuracy − 多数类基线** 作为结论指标，并同时报告 n 与 Wilson 区间。
+
+### 9.2 全量统计：34 条历史回测（`data/prediction_runs.json`）
+
+| 指标 | 值 |
+|---|---|
+| `improvement`（模型准确率 − 基准率）中位数 | **0.0000** |
+| `improvement` 最大值 / 最小值 | +1.89pp / −31.4pp |
+| 跑赢基准率的条数 | **7 / 34** |
+| 基准率中位数 / 最大 | 71.4% / 90.0% |
+| walk-forward 样本数上限 | 14（统计功效极弱） |
+
+### 9.3 消融实测：三层集成 vs 各变体
+
+命令：`python scripts/ablation_edge.py --symbol 000933 --folds 3 --test-size 0.15`
+数据：`data/market.sqlite` 中 000933 的 795 根真实前复权日线；样本外 354 行；3 折 purged walk-forward；`[全量实测]`
+
+| 变体 | n | 准确率 | 多数类基线 | **edge** | MCC |
+|---|---|---|---|---|---|
+| constant（恒猜多数类） | 354 | 0.5734 | 0.5734 | **+0.0000** | 0.0000 |
+| single_gb（单梯度提升） | 354 | 0.5198 | 0.5734 | −0.0537 | −0.0532 |
+| **ensemble（当前交付路径）** | 354 | 0.4548 | 0.5734 | **−0.1186** | −0.1519 |
+| ensemble_no_regime（去掉 regime 层） | 354 | 0.4633 | 0.5734 | −0.1102 | −0.1372 |
+| momentum_rule（趋势规则） | 354 | 0.4266 | 0.5734 | −0.1469 | −0.1145 |
+
+**结论**：在当前数据上，三层集成比「恒猜多数类」**差 11.9 个百分点**（MCC −0.15）；
+单模型差距较小（−5.4pp）但仍为负。去掉 regime 层只回收约 0.8pp，**不足以让集成转正**。
+注意：这是**单只股票、354 行样本外**的结论，属方向性证据；扩到多标的请用 `--all-symbols`。
+因此**尚未据此删除任何模型代码**——删除必须以多标的消融复现为前提（判据先于产物）。
+
+### 9.4 新增的实盘长期验证设施
+
+| 组件 | 作用 |
+|---|---|
+| `data/market.sqlite`（`src/validation/market_store.py`） | 本地前复权日线库，UPSERT 幂等，**禁止合成数据回退** |
+| `scripts/daily_live_validation.py` | 唯一入口：抓取 → 结算 → 出报告（幂等，可 `--skip-fetch`） |
+| `src/validation/performance_report.py` | 全量口径指标：accuracy / baseline / **edge** / Wilson CI / 平衡准确率 / MCC / Brier / IC |
+| `data/live_eval/ledger_YYYYMM.jsonl` | 只追加的每日台账，一天一行，可追溯长期趋势 |
+| `GET /api/investment/live-performance` | 只读接口，前端 InsightsPage 已展示，**首行显示 edge 与样本判定** |
+| `src/jobs/investment_jobs.py` | APScheduler 每工作日 16:45 调用；`scripts/register_daily_task.ps1` 提供任务计划兜底（需用户自行注册） |
+
+**当前实盘样本**：16 条信号 / 15 条已结算 → `insufficient_n = true`，
+报告会明确写「样本不足，不得声称提升」，而不是给出一个好看的准确率。
+
+### 9.5 复现方式
+
+```bash
+python scripts/daily_live_validation.py                  # 结算 + 出报告
+python scripts/ablation_edge.py --all-symbols --folds 3  # 多标的消融
+python scripts/audit_imports.py --report                 # 死代码审计
+```

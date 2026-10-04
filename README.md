@@ -4,18 +4,36 @@ This repository contains a local stock analysis and forecasting application with
 
 The target data domain is the China A-share market and the broader Chinese market, so some Chinese text in upstream data, labels, or generated output is expected and cannot be fully avoided.
 
-## 🎉 Latest Update: Algorithm Optimization (2025-01-28)
+## Current status (measured 2026-10-04)
 
-The prediction algorithm has been significantly enhanced:
-- ✅ **90 features** (up from 25, +260%)
-- ✅ **Up to 8 ML models** — sklearn ensemble by default; LightGBM, XGBoost, CatBoost when the optional deps are installed (up from 5, +60%)
-- ✅ **Expected accuracy improvement**: 62-68% (from 58%, +4-10%)
-- ✅ **Smart data preprocessing** with 88% data retention
+All numbers below were produced by running the code in this repository, not from design intent.
 
-**See**: 
-- `docs/OPTIMIZATION_SUMMARY.md` - Quick overview
-- `docs/USAGE_GUIDE.md` - Detailed usage guide
-- `docs/OPTIMIZATION_COMPLETE.md` - Full technical report
+| Item | Measured |
+|---|---|
+| Features actually produced by `prepare_features()` | **58** (22 base + 8 time-series + 13 cross + 15 microstructure) |
+| Models actually trained | **5** by default (RandomForest, GradientBoosting, ExtraTrees, LogisticRegression, SVM); LightGBM/XGBoost/CatBoost only when those optional packages are installed |
+| Prediction edge over the majority-class baseline | **not demonstrated** — across all 34 stored backtests the median `improvement` is **0.0000** (7/34 positive, max +1.89pp) |
+| Why accuracy is misleading here | the label is `1 = 5-day return above +2%`, so 60-90% of days are 0 and a constant "never up" predictor already scores 71% (median over stored backtests) |
+
+**Authoritative status report**: [docs/SYSTEM_CAPABILITY_REPORT.md](docs/SYSTEM_CAPABILITY_REPORT.md).
+
+Historical optimisation write-ups that claimed 79.93% accuracy / F1 0.7102 are **not reproducible**
+(their data path imports a non-existent `get_db_session` and silently falls back to seeded synthetic data).
+They now live under [docs/archive/](docs/archive/) with an invalidation notice.
+
+### Measuring performance honestly
+
+```bash
+# settle matured signals from stored bars and rewrite the live report
+python scripts/daily_live_validation.py
+
+# compare variants on identical purged walk-forward folds (edge vs baseline)
+python scripts/ablation_edge.py --symbol 000933 --folds 3
+```
+
+The metric of record is `edge = accuracy - majority_class_baseline`, reported with `n` and a Wilson
+interval. Below 200 resolved signals the report is explicitly flagged `insufficient_n` and no
+improvement may be claimed.
 
 ## Stack
 
@@ -107,7 +125,6 @@ The PowerShell launcher starts the backend and frontend in the background and wr
 - `GET /api/stocks/realtime`
 - `GET /api/stocks/market-overview`
 - `GET /api/stocks/{symbol}`
-- `GET /api/news/realtime`
 - `GET /api/predictions/predict`
 - `POST /api/predictions/backtest`
 - `POST /api/auth/register`
@@ -121,6 +138,7 @@ The PowerShell launcher starts the backend and frontend in the background and wr
 - `GET /api/investment/watchlist`
 - `PUT /api/investment/watchlist`
 - `POST /api/investment/portfolio/backtest`
+- `GET /api/investment/live-performance`
 - `GET /api/investment/paper/account`
 - `POST /api/investment/paper/account`
 - `GET /api/tasks/status`
@@ -134,10 +152,12 @@ The frontend uses `REACT_APP_API_BASE_URL` when provided. If the variable is not
 
 ## Testing
 
-Backend tests:
+Backend tests (use the project virtualenv so versions match `requirements.txt`):
 
 ```bash
-pytest tests
+python -m venv .venv
+.venv/Scripts/python -m pip install -r requirements.txt   # Windows
+.venv/Scripts/python -m pytest tests -q
 ```
 
 Frontend tests:
