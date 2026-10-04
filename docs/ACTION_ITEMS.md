@@ -16,7 +16,7 @@
 **当前状态**:
 ```yaml
 environment:
-  - DEEPSEEK_API_KEY=sk-REDACTED  # ❌ 硬编码
+  - DEEPSEEK_API_KEY=sk-REDACTED-see-.env  # ❌ 硬编码
   - POSTGRES_PASSWORD=REDACTED  # ❌ 简单密码
 ```
 

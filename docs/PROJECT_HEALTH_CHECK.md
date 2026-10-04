@@ -308,7 +308,7 @@ flake8==6.1.0          ✅
 
 1. **docker-compose.yml中的敏感信息**
    ```yaml
-   DEEPSEEK_API_KEY=sk-REDACTED
+   DEEPSEEK_API_KEY=sk-REDACTED-see-.env
    POSTGRES_PASSWORD=REDACTED
    ```
    - ⚠️ **严重**: API密钥和密码硬编码
