@@ -284,7 +284,6 @@ class TestIntegration:
                 "baseline_accuracy": 0.55,
                 "improvement": 0.06,
                 "feature_importance": {},
-                "sentiment_comparison": {},
                 "walk_forward": {"accuracy": 0.61, "samples": 42},
                 "timestamp": 123457.0,
             },
@@ -345,9 +344,7 @@ class TestIntegration:
             "api.routes.admin.feature_history_backfill_service.get_status",
             lambda: {
                 "breadth_days": 2,
-                "sentiment_days": 1,
                 "breadth_range": {"start": "2024-01-01", "end": "2024-01-02"},
-                "sentiment_range": {"start": "2024-01-01", "end": "2024-01-01"},
                 "data_dir": "/tmp/feature_history",
             },
         )
@@ -357,10 +354,9 @@ class TestIntegration:
                 "requested_days": kwargs.get("days", 90),
                 "cutoff_date": "2024-01-01",
                 "overwrite": kwargs.get("overwrite", False),
-                "sentiment": {"enabled": True, "written": 1, "skipped": 0, "days": 1},
                 "breadth": {"enabled": True, "written": 2, "skipped": 0, "days": 2, "source": "index_proxy"},
                 "errors": [],
-                "status": {"breadth_days": 2, "sentiment_days": 1},
+                "status": {"breadth_days": 2},
             },
         )
 
@@ -388,8 +384,6 @@ class TestIntegration:
             headers=headers,
             json={
                 "days": 30,
-                "news_limit": 120,
-                "fill_sentiment": True,
                 "fill_breadth": True,
                 "overwrite": False,
             },

@@ -30,3 +30,16 @@ def isolated_auth_storage(tmp_path, monkeypatch):
     auth._sessions = {}
     auth._refresh_index = {}
     return auth
+
+
+@pytest.fixture
+def isolated_investment_storage(tmp_path, monkeypatch):
+    from flask_services.investment_repository import JsonInvestmentRepository
+    from api.services import investment_service as inv
+
+    signal_file = tmp_path / "signal_logs.json"
+    inv._repo = JsonInvestmentRepository(tmp_path)
+    monkeypatch.setattr(inv.signal_tracker, "_file", signal_file)
+    inv._portfolio_cache = {}
+    inv._outcome_resolver = None
+    return inv

@@ -29,17 +29,6 @@ def test_record_breadth_skip_without_overwrite(tmp_path):
 def test_get_status_reports_ranges(tmp_path):
     store = FeatureHistoryStore(tmp_path)
     store.record_market_breadth("2024-01-02", 0.1)
-    store.record_sentiment_daily(
-        "2024-01-04",
-        {
-            "sentiment_score": 0.2,
-            "sentiment_confidence": 0.5,
-            "positive_ratio": 0.3,
-            "negative_ratio": 0.1,
-            "target_match_count": 2,
-        },
-    )
     status = store.get_status()
     assert status["breadth_days"] == 1
-    assert status["sentiment_days"] == 1
     assert status["breadth_range"]["start"] == "2024-01-02"

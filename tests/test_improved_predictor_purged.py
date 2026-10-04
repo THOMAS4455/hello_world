@@ -74,3 +74,18 @@ class TestPurgedSplit:
         cal = result.get("calibration", {})
         assert "brier_raw" in cal
         assert "brier_calibrated" in cal
+
+
+class TestEvalMetrics:
+    def test_up_class_metrics_differ_from_accuracy(self):
+        predictor = ImprovedPredictor()
+        y_true = [1, 1, 1, 1, 1, 0, 0, 0, 0, 0]
+        y_pred = [1, 1, 0, 0, 0, 0, 0, 0, 0, 0]
+        metrics = predictor._eval_metrics(y_true, y_pred)
+
+        assert metrics["accuracy"] == pytest.approx(0.7)
+        assert metrics["precision"] == pytest.approx(1.0)
+        assert metrics["recall"] == pytest.approx(0.4)
+        assert metrics["f1"] == pytest.approx(2 * 1.0 * 0.4 / (1.0 + 0.4))
+        assert metrics["accuracy"] != metrics["recall"]
+        assert metrics["precision"] != metrics["accuracy"]

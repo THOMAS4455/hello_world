@@ -41,6 +41,7 @@ data/live_eval/
 config/model_config.yaml
 .env.docker
 .kiro/
+dsh-mobile-portal/
 
 # IDE
 .vscode/

@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=1100">
+<title>ML Training Monitor — Live</title>
+<style>
+/* ═══════════ Design Tokens ═══════════ */
+:root{
+  --bg:#f0f2f5; --card:#fff; --bor:rgba(0,0,0,.055); --tx:#111; --sx:#555; --mx:#999;
+  --bl:#1a56db;   --blb:#e8f0fe;   --blg:linear-gradient(135deg,#1a56db,#4f8cff);
+  --gn:#0d904f;   --gnb:#e6f4ea;   --gng:linear-gradient(135deg,#0d904f,#2cc069);
+  --rd:#d93025;   --rdb:#fce8e6;   --rdg:linear-gradient(135deg,#d93025,#f06050);
+  --am:#b45309;   --amb:#fff7ed;   --amg:linear-gradient(135deg,#b45309,#f59e0b);
+  --pp:#7c3aed;   --ppb:#f3eeff;   --ppg:linear-gradient(135deg,#7c3aed,#a78bfa);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);font:14px/1.5 -apple-system,BlinkMacSystemFont,'SF Pro Text','PingFang SC','Microsoft YaHei',sans-serif;padding:12px;color:var(--tx);-webkit-font-smoothing:antialiased}
+
+/* ═══════════ Top Bar ═══════════ */
+.topbar{position:sticky;top:0;z-index:100;background:rgba(255,255,255,.78);backdrop-filter:saturate(180%) blur(24px);-webkit-backdrop-filter:saturate(180%) blur(24px);border-bottom:1px solid var(--bor);padding:10px 20px;margin:-12px -12px 16px;display:flex;align-items:center;gap:16px}
+.topbar .brand{font-size:15px;font-weight:700;letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
+.topbar .brand .dot{width:8px;height:8px;border-radius:50%;background:var(--bl);animation:pulse 1.2s infinite}
+.topbar .stock{font-family:'SF Mono',ui-monospace,Consolas,monospace;font-size:13px;font-weight:600;color:var(--bl);background:var(--blb);padding:3px 12px;border-radius:20px}
+.topbar .badge{font-size:12px;font-weight:600;padding:4px 14px;border-radius:20px;background:var(--blb);color:var(--bl)}
+.topbar .badge.done{background:var(--gnb);color:var(--gn)}
+.topbar .badge.cancelled{background:var(--rdb);color:var(--rd)}
+.topbar .spacer{flex:1}
+.topbar .btn{font-size:12px;font-weight:550;padding:5px 14px;border-radius:20px;border:1px solid rgba(0,0,0,.08);background:var(--card);color:var(--sx);cursor:pointer;transition:all .12s;outline:none}
+.topbar .btn:hover{border-color:#bbb;color:var(--tx)}
+.topbar .btn.active{background:var(--bl);color:#fff;border-color:var(--bl)}
+.topbar .btn.danger{color:var(--rd);border-color:rgba(217,48,37,.2)}
+.topbar .btn.danger:hover{background:var(--rdb);border-color:var(--rd)}
+
+/* ═══════════ Main Grid ═══════════ */
+.main{display:grid;grid-template-columns:232px 1fr;gap:14px;max-width:1100px;margin:0 auto}
+
+/* ═══════════ Sidebar Timeline ═══════════ */
+.sidebar{position:sticky;top:60px;align-self:start;display:flex;flex-direction:column;gap:1px;background:var(--card);border:1px solid var(--bor);border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.02)}
+.sidebar .si{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;font-size:12.5px;font-weight:500;color:var(--mx);transition:all .15s;position:relative;border-left:3px solid transparent}
+.sidebar .si:hover{background:rgba(0,0,0,.015);color:var(--sx)}
+.sidebar .si.current{background:var(--blb);color:var(--bl);font-weight:650;border-left-color:var(--bl)}
+.sidebar .si.done{color:var(--gn)}
+.sidebar .si .indicator{width:7px;height:7px;border-radius:50%;flex-shrink:0;transition:all .3s}
+.sidebar .si .indicator.pending{background:#d5d5db}
+.sidebar .si .indicator.running{background:var(--bl);box-shadow:0 0 0 3px rgba(26,86,219,.2);animation:pulse 1s infinite}
+.sidebar .si .indicator.done{background:var(--gn)}
+.sidebar .si .indicator.error{background:var(--rd)}
+.sidebar .si .time{font-size:11px;color:var(--mx);margin-left:auto;font-family:'SF Mono',monospace}
+
+/* ═══════════ Content Panel ═══════════ */
+.panel{background:var(--card);border:1px solid var(--bor);border-radius:16px;overflow:hidden;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.018);transition:opacity .3s,transform .3s}
+.panel-header{padding:12px 18px;border-bottom:1px solid var(--bor);display:flex;align-items:center;gap:10px;font-size:13.5px;font-weight:650;background:#fcfcfd}
+.panel-header .icon{width:30px;height:30px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:15px}
+.panel-header .icon.blue{background:var(--blb);color:var(--bl)}
+.panel-header .icon.green{background:var(--gnb);color:var(--gn)}
+.panel-header .icon.amber{background:var(--amb);color:var(--am)}
+.panel-header .icon.purple{background:var(--ppb);color:var(--pp)}
+.panel-body{padding:16px 18px}
+
+/* ═══════════ Explanation Block ═══════════ */
+.explain{padding:10px 14px;border-radius:10px;font-size:13px;line-height:1.55;margin-bottom:12px;display:flex;gap:8px}
+.explain .ex-icon{font-size:16px;flex-shrink:0;margin-top:1px}
+.explain.blue{background:var(--blb);color:var(--bl);border:1px solid rgba(26,86,219,.1)}
+.explain.amber{background:var(--amb);color:var(--am);border:1px solid rgba(180,83,9,.1)}
+.explain.purple{background:var(--ppb);color:var(--pp);border:1px solid rgba(124,58,237,.1)}
+
+/* ═══════════ Step List ═══════════ */
+.step{display:flex;align-items:flex-start;gap:12px;padding:10px 12px;cursor:pointer;border-radius:10px;transition:background .1s;margin:1px 0}
+.step:hover{background:rgba(0,0,0,.012)}
+.step .st-icon{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;transition:all .3s}
+.step .st-icon.done{background:var(--gnb);color:var(--gn);border:1.5px solid rgba(13,144,79,.3)}
+.step .st-icon.running{background:var(--blb);color:var(--bl);border:1.5px solid rgba(26,86,219,.3);animation:pulse 1s infinite}
+.step .st-icon.pending{background:#f5f5f8;color:var(--mx);border:1.5px solid #d5d5db}
+.step .st-body{flex:1;min-width:0}
+.step .st-head{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.step .st-name{font-size:13px;font-weight:600}
+.step .st-sub{font-weight:400;color:var(--mx);margin-left:6px;font-size:12px}
+.step .st-time{font-size:11px;color:var(--mx);white-space:nowrap;font-family:'SF Mono',monospace}
+.step .st-detail{font-size:12.5px;color:var(--sx);margin-top:4px;display:none;line-height:1.55}
+.step.expanded .st-detail{display:block}
+.step.expanded .st-detail pre{font-family:'SF Mono',ui-monospace,Consolas,monospace;font-size:11.5px;background:#f8f9fb;border-radius:8px;padding:10px 12px;margin-top:6px;overflow-x:auto;max-height:200px;overflow-y:auto;line-height:1.6;border:1px solid rgba(0,0,0,.04)}
+
+/* ═══════════ Progress Bar ═══════════ */
+.pbar{margin-bottom:14px}
+.pbar-row{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+.pbar-label{font-size:12px;font-weight:600;color:var(--sx)}
+.pbar-pct{font-size:12px;font-weight:700;color:var(--bl);min-width:32px;text-align:right;font-family:'SF Mono',monospace}
+.pbar-track{flex:1;height:6px;background:#eeeef2;border-radius:3px;overflow:hidden}
+.pbar-fill{height:100%;background:var(--blg);border-radius:3px;transition:width .4s cubic-bezier(.22,.1,.15,1);position:relative}
+.pbar-fill::after{content:'';position:absolute;right:0;top:0;bottom:0;width:20px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.4));border-radius:3px}
+
+/* ═══════════ Model Cards ═══════════ */
+.model-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:6px;margin:8px 0 0 34px}
+.mc{background:#fcfcfd;border:1px solid rgba(0,0,0,.04);border-radius:10px;padding:10px 12px;cursor:pointer;transition:all .18s;position:relative;overflow:hidden}
+.mc::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:#d5d5db;border-radius:0 3px 3px 0;transition:all .3s}
+.mc:hover{box-shadow:0 4px 16px rgba(0,0,0,.06);transform:translateY(-1px)}
+.mc.pending{opacity:.45}
+.mc.pending::before{background:#d5d5db}
+.mc.running{background:rgba(26,86,219,.025)}
+.mc.running::before{background:var(--bl);animation:borderPulse 1s infinite}
+.mc.done::before{background:var(--gn)}
+.mc.done{background:rgba(13,144,79,.012)}
+.mc .m-name{font-size:12.5px;font-weight:650;display:flex;justify-content:space-between;margin-bottom:4px}
+.mc .m-score{font-family:'SF Mono',monospace;font-size:14px;font-weight:700;color:var(--bl);margin:2px 0}
+.mc .m-meta{font-size:11px;color:var(--mx)}
+.mc .m-folds{display:none;margin-top:8px;padding-top:6px;border-top:1px solid rgba(0,0,0,.04)}
+.mc.expanded .m-folds{display:block}
+.fold-row{display:flex;gap:3px;margin-top:4px}
+.fold-dot{height:10px;flex:1;border-radius:2px;background:#eaeaef;position:relative;cursor:help;transition:background .2s}
+.fold-dot.done{background:var(--gn)}
+.fold-dot:hover::after{content:attr(tip);position:absolute;bottom:14px;left:50%;transform:translateX(-50%);background:#222;color:#fff;font-size:10px;padding:2px 7px;border-radius:4px;white-space:nowrap;z-index:5}
+
+@keyframes borderPulse{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(1.25)}}
+
+/* ═══════════ Section Label ═══════════ */
+.sec-label{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:650;color:var(--sx);margin:10px 0 4px 34px}
+.sec-tag{font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:12px}
+.sec-tag.done{background:var(--gnb);color:var(--gn)}
+.sec-tag.active{background:var(--blb);color:var(--bl)}
+.sec-tag.pending{background:#f0f0f5;color:var(--mx)}
+
+/* ═══════════ Console ═══════════ */
+.console{font-family:'SF Mono',ui-monospace,Consolas,monospace;font-size:11px;background:#1a1a1e;color:#a1a1aa;border-radius:12px;padding:10px 14px;margin-top:8px;max-height:150px;overflow-y:auto;line-height:1.65}
+.console .ts{color:#52525b;margin-right:8px}
+.console .ok{color:#4ade80}.console .wn{color:#fbbf24}.console .in{color:#60a5fa}.console .er{color:#f87171}
+
+/* ═══════════ Comparison Cards ═══════════ */
+.vs{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0}
+.vc{background:#fcfcfd;border:1px solid var(--bor);border-radius:12px;padding:14px 16px;transition:all .15s}
+.vc:hover{box-shadow:0 4px 16px rgba(0,0,0,.04)}
+.vc .v-label{font-size:11px;font-weight:600;color:var(--mx);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px}
+.vc .v-value{font-size:22px;font-weight:700;color:var(--tx);margin:2px 0;letter-spacing:-.01em}
+.vc .v-desc{font-size:11.5px;color:var(--sx);line-height:1.4}
+
+/* ═══════════ Data Table ═══════════ */
+.dt{width:100%;border-collapse:collapse;font-size:13px}
+.dt th{font-size:11px;font-weight:650;color:var(--mx);text-transform:uppercase;letter-spacing:.03em;padding:8px 10px;text-align:left;border-bottom:1px solid var(--bor)}
+.dt td{padding:9px 10px;border-bottom:1px solid rgba(0,0,0,.025)}
+.dt .num{text-align:right;font-family:'SF Mono',monospace;font-variant-numeric:tabular-nums}
+.dt .highlight{font-size:15px;font-weight:700}
+
+/* ═══════════ Feature Bars ═══════════ */
+.fbar{display:flex;align-items:center;gap:10px;margin:3px 0;font-size:12px}
+.fbar .f-name{width:150px;text-align:right;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:'SF Mono',monospace;font-size:11px;color:var(--tx)}
+.fbar .f-track{flex:1;height:18px;background:#eeeef2;border-radius:4px;overflow:hidden}
+.fbar .f-fill{height:100%;border-radius:4px;background:var(--blg);transition:width .6s cubic-bezier(.22,.1,.15,1)}
+.fbar .f-val{width:36px;text-align:right;font-weight:650;font-family:'SF Mono',monospace;font-size:11px;color:var(--bl)}
+.fbar .f-desc{width:130px;font-size:11px;color:var(--mx)}
+
+/* ═══════════ LSTM Chart ═══════════ */
+.lchart{display:flex;align-items:flex-end;gap:3px;height:60px;margin:8px 0;padding:0 4px}
+.lbar{border-radius:3px 3px 0 0;width:12px;position:relative;cursor:help;transition:height .3s}
+.lbar.train{background:var(--bl);opacity:.85}
+.lbar.val{background:var(--gn);opacity:.5}
+.lbar:hover{filter:brightness(1.2)}
+.lbar:hover::after{content:attr(tip);position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:#222;color:#fff;font-size:10px;padding:2px 8px;border-radius:4px;white-space:nowrap;z-index:5;pointer-events:none}
+.lchart-legend{display:flex;gap:20px;font-size:11px;color:var(--mx);margin-bottom:6px}
+.lchart-legend span{display:flex;align-items:center;gap:4px}
+.lchart-legend .swatch{width:10px;height:10px;border-radius:2px}
+</style>
+</head>
+<body>
+
+<!-- ═══════════ TOP BAR ═══════════ -->
+<div class="topbar">
+  <div class="brand"><div class="dot"></div>模型训练监控</div>
+  <div class="stock">000001 平安银行</div>
+  <div class="badge" id="statusBadge">● 训练中</div>
+  <div class="spacer"></div>
+  <button class="btn active" onclick="setSpeed(1)">1×</button>
+  <button class="btn" onclick="setSpeed(5)">5×</button>
+  <button class="btn" onclick="setSpeed(20)">20×</button>
+  <button class="btn" id="pauseBtn" onclick="togglePause()">⏸ 暂停</button>
+  <button class="btn danger" id="cancelBtn" onclick="simCancel()">取消</button>
+</div>
+
+<div class="main">
+
+<!-- ═══════════ SIDEBAR ═══════════ -->
+<div class="sidebar" id="sidebar">
+  <div class="si current"><div class="indicator running"></div>加载数据<span class="time">~3s</span></div>
+  <div class="si"><div class="indicator pending"></div>构造特征<span class="time">~1s</span></div>
+  <div class="si"><div class="indicator pending"></div>打标签 & 切分<span class="time">~0.5s</span></div>
+  <div class="si"><div class="indicator pending"></div>Layer1 基线模型<span class="time">~4s</span></div>
+  <div class="si"><div class="indicator pending"></div>Layer2 增强模型<span class="time">~9s</span></div>
+  <div class="si"><div class="indicator pending"></div>市场状态判断<span class="time">~2s</span></div>
+  <div class="si"><div class="indicator pending"></div>LSTM 深度学习<span class="time">~29s</span></div>
+  <div class="si"><div class="indicator pending"></div>权重自动学习<span class="time">~2s</span></div>
+  <div class="si"><div class="indicator pending"></div>特征重要性<span class="time">~1s</span></div>
+  <div class="si"><div class="indicator pending"></div>综合决策<span class="time">~0s</span></div>
+</div>
+
+<!-- ═══════════ CONTENT ═══════════ -->
+<div id="contentArea">
+
+<!-- PHASE 1 -->
+<div class="panel" id="p0" style="display:block">
+  <div class="panel-header"><div class="icon blue">📡</div>加载历史行情数据</div>
+  <div class="panel-body">
+    <div class="explain blue"><div class="ex-icon">💡</div><div><b>这是在做什么？</b> 预测需要历史经验——就像医生需要病历才能诊断。这一步从互联网拉取这只股票过去5年的所有交易记录（每天的开盘价、最高价、最低价、收盘价和成交量，简称 <b>OHLCV</b>）。</div></div>
+    <div class="step expanded"><div class="st-icon done">✓</div><div class="st-body"><div class="st-head"><div class="st-name">通过新浪行情接口拉取数据<span class="st-sub">— 中国 A 股数据最全最快的源</span></div><div class="st-time">0.4s</div></div><div class="st-detail"><pre>请求: GET http://api.sina.com/stock/000001/daily
+响应: 200 OK → 1,247 行 × 6 列
+
+每一行代表一个交易日，包含 6 个数字：
+  Open  (开盘价)  = 早上 9:30 第一笔成交价
+  High  (最高价)  = 当天涨到过的最高点
+  Low   (最低价)  = 当天跌到过的最低点
+  Close (收盘价)  = 下午 3:00 最后一笔成交价
+  Volume(成交量)  = 当天买卖了多少股
+
+2021-06-01  O=23.50 H=24.10 L=23.20 C=23.80 V=18,234,500
+2021-06-02  O=23.72 H=24.35 L=23.55 C=24.10 V=22,156,800
+...
+2026-06-09  O=12.95 H=13.12 L=12.78 C=12.95 V=5,492,300</pre></div></div></div>
+    <div class="step expanded"><div class="st-icon done">✓</div><div class="st-body"><div class="st-head"><div class="st-name">数据完整性校验<span class="st-sub">— 确保没有空值、异常值、跳空日</span></div><div class="st-time">0.2s</div></div><div class="st-detail">✓ 0 行缺失 · ✓ 日期连续无跳跃 · ✓ 最高价 ≥ 最低价 · ✓ 成交量 > 0<br>共 <b>1,247</b> 个交易日，跨度 5 年 (2021-06 → 2026-06)</div></div></div>
+    <div class="step"><div class="st-icon pending">○</div><div class="st-body"><div class="st-head"><div class="st-name">写入磁盘缓存<span class="st-sub">— 下次打开同一只股票秒出，无需重新下载</span></div></div></div></div>
+    <div class="explain purple" style="margin-top:10px"><div class="ex-icon">🛡</div><div><b>容灾机制</b>：系统配置了 4 个数据源（新浪 → 腾讯 → 东方财富 → 磁盘缓存），一个挂了自动切下一个，保证永远有数据可用。</div></div>
+  </div>
+</div>
+
+<!-- PHASE 2 -->
+<div class="panel" id="p1" style="display:none">
+  <div class="panel-header"><div class="icon blue">🔧</div>构造特征 — 把原始数字变成"可学习的信号"</div>
+  <div class="panel-body">
+    <div class="explain blue"><div class="ex-icon">💡</div><div><b>这是在做什么？</b> 模型不能直接"看懂"裸价格——需要从原始数据里推导出各种技术指标（就像医生把体温、血压、心率综合成诊断依据）。这一步从 6 列原始数据算出 <b>90 个特征指标</b>，分 7 大类。</div></div>
+    <div class="pbar"><div class="pbar-row"><div class="pbar-label">特征工程进度</div><div class="pbar-track"><div class="pbar-fill" style="width:55%"></div></div><div class="pbar-pct">55%</div></div></div>
+    <div class="step expanded"><div class="st-icon done">✓</div><div class="st-body"><div class="st-head"><div class="st-name">① 趋势类 (5个)<span class="st-sub">— MA5·MA20·MA60·趋势强度·MA60偏离率</span></div><div class="st-time">完成</div></div><div class="st-detail">MA5 = 近5天均价 (短线方向) · MA20 = 近20天均价 (中线方向) · MA60 = 近60天均价 (长线方向)<br>趋势强度 = (MA5 - MA20) ÷ MA20 → 正值=上涨趋势 / 负值=下跌趋势</div></div></div>
+    <div class="step expanded"><div class="st-icon done">✓</div><div class="st-body"><div class="st-head"><div class="st-name">② 动量类 (7个)<span class="st-sub">— RSI·MACD·MACD信号线·价格变化率(1d/2d/5d/10d)</span></div><div class="st-time">完成</div></div><div class="st-detail">RSI(14天) = 相对强弱指数，0~100，>70 超买(可能回调)，<30 超卖(可能反弹)<br>MACD = EMA12 - EMA26 → 两根指数均线的差，正值=多头趋势</div></div></div>
+    <div class="step"><div class="st-icon running">●</div><div class="st-body"><div class="st-head"><div class="st-name">③ 波动类 (6个) ← 正在计算<span class="st-sub">— 布林带·ATR·波动率(10d/30d)·Garman-Klass</span></div></div></div></div>
+    <div class="step"><div class="st-icon pending">○</div><div class="st-body"><div class="st-head"><div class="st-name">④ 成交量类 (4个)</div></div></div></div>
+    <div class="step"><div class="st-icon pending">○</div><div class="st-body"><div class="st-head"><div class="st-name">⑤ 时序滞后 (9个)</div></div></div></div>
+    <div class="step"><div class="st-icon pending">○</div><div class="st-body"><div class="st-head"><div class="st-name">⑥ 交叉特征 (13个)</div></div></div></div>
+    <div class="step"><div class="st-icon pending">○</div><div class="st-body"><div class="st-head"><div class="st-name">⑦ 微观结构 (15个)</div></div></div></div>
+  </div>
+</div>
+
+<!-- PHASE 3 -->
+<div class="panel" id="p2" style="display:none">
+  <div class="panel-header"><div class="icon blue">✂️</div>打标签 & 切分训练/验证集</div>
+  <div class="panel-body">
+    <div class="explain blue"><div class="ex-icon">💡</div><div><b>这是在做什么？</b> 模型需要"标准答案"才能学习——我们告诉模型历史数据里真实发生了什么（5天后涨了还是跌了），让模型对照自己的预测和真实答案来修正自己。然后把数据切成"教材"（训练集）和"考卷"（验证集）两部分。</div></div>
+    <div class="step expanded"><div class="st-icon done">✓</div><div class="st-body"><div class="st-head"><div class="st-name">生成标准答案（标签 Label）</div><div class="st-time">0.2s</div></div><div class="st-detail">规则：看 5 天后的收盘价与今天的收盘价对比<br>• 如果 5 天后涨了超过 2% → 标签 = 1 (涨)<br>• 如果 5 天后没涨那么多、或者跌了 → 标签 = 0 (跌/平)<br><br>结果：1,247 天中 48.3% 标记为"涨"，51.7% 标记为"跌/平"（基本均衡，适合模型训练）</div></div></div>
+    <div class="vs">
+      <div class="vc"><div class="v-label">训练集 | Teaching Set</div><div class="v-value">998 行</div><div class="v-desc">前 80% 数据 (2021→2025)<br>作为"教材"教模型学规律</div></div>
+      <div class="vc"><div class="v-label">验证集 | Exam Set</div><div class="v-value">249 行</div><div class="v-desc">后 20% 数据 (2025→2026)<br>作为"考试"检验模型是否真正学会了</div></div>
+    </div>
+    <div class="explain amber" style="margin-top:8px"><div class="ex-icon">⚠</div><div><b>为什么必须严格按时间分开？</b> 如果打乱顺序，模型可能用"未来"的数据去预测"过去"——这叫数据泄露，就像考试前偷看了答案。系统使用 TimeSeriesSplit（时序切分），确保训练数据的时间始终在验证数据之前。</div></div>
+  </div>
+</div>
+
+<!-- PHASE 4 -->
+<div class="panel" id="p3" style="display:none">
+  <div class="panel-header"><div class="icon green">🌳</div>Layer 1 · 基线模型 — 3 个"决策树"集成学习</div>
+  <div class="panel-body">
+    <div class="explain blue"><div class="ex-icon">💡</div><div><b>这是在做什么？</b> "决策树"就像做选择题——先看 RSI 是否超买，再看成交量是否放大，逐步缩小范围最终投票决定。3 个不同的树模型各自学习，每个都做 5 折交叉验证（把数据分成 5 份，轮流用 4 份练、1 份测，取平均——就像做 5 套模拟卷估分比做 1 套准得多）。</div></div>
+    <div class="sec-label"><span class="sec-tag done">3 / 3 完成</span> 基线层 Baseline Layer</div>
+    <div class="model-grid">
+      <div class="mc done">
+        <div class="m-name">🌲 Random Forest<div>68.2%</div></div>
+        <div class="m-score">CV 0.6821</div>
+        <div class="m-meta">±3.1% · 150棵树 · 深度12 · 1.2s</div>
+      </div>
+      <div class="mc done">
+        <div class="m-name">🌲 Gradient Boost<div>65.3%</div></div>
+        <div class="m-score">CV 0.6534</div>
+        <div class="m-meta">±2.9% · 120轮迭代 · lr=0.05 · 2.1s</div>
+      </div>
+      <div class="mc done">
+        <div class="m-name">🌲 LightGBM<div>67.1%</div></div>
+        <div class="m-score">CV 0.6712</div>
+        <div class="m-meta">±2.7% · 150轮 · 20叶子 · 0.9s</div>
+      </div>
+    </div>
+    <div class="console" style="margin-top:8px"><span class="ts">14:35:02</span><span class="ok">[RF]</span> 5折CV: 68.9/67.2/<b>69.5</b>/66.4/69.1 → μ=68.2% σ=3.1%<br><span class="ts">14:35:04</span><span class="ok">[GB]</span> 5折CV: 66.1/64.9/67.2/63.5/65.0 → μ=65.3% σ=2.9%<br><span class="ts">14:35:06</span><span class="ok">[LGB]</span> 5折CV: 67.3/66.2/68.0/66.0/<b>68.1</b> → μ=67.1% σ=2.7%</div>
+  </div>
+</div>
+
+<!-- PHASE 5 -->
+<div class="panel" id="p4" style="display:none">
+  <div class="panel-header"><div class="icon blue">📊</div>Layer 2 · 增强模型 — 5 个不同思路交叉验证</div>
+  <div class="panel-body">
+    <div class="explain blue"><div class="ex-icon">💡</div><div><b>这是在做什么？</b> Layer 1 全是树模型（同一种思路），Layer 2 引入完全不同类型的模型——统计回归、数学向量机、梯度提升变体。不同思路交叉验证，总比一种思路靠谱。</div></div>
+    <div class="sec-label"><span class="sec-tag active">3 / 5 训练中</span> 增强层 Enhanced Layer</div>
+    <div class="model-grid">
+      <div class="mc done"><div class="m-name">📈 Extra Trees</div><div class="m-score">0.6433</div><div class="m-meta">±3.1% · 150棵极随机树</div></div>
+      <div class="mc done"><div class="m-name">📉 逻辑回归</div><div class="m-score">0.5912</div><div class="m-meta">±1.9% · L2正则 · 概率校准</div></div>
+      <div class="mc done"><div class="m-name">📐 SVM (RBF核)</div><div class="m-score">0.6221</div><div class="m-meta">±2.5% · C=0.5 · 非线性边界</div></div>
+      <div class="mc running"><div class="m-name">⚡ XGBoost</div><div class="m-meta" style="color:var(--bl)">⏳ 第3/5折交叉验证中…</div></div>
+      <div class="mc pending"><div class="m-name">🐱 CatBoost</div><div class="m-meta">等待前一个完成…</div></div>
+    </div>
+    <div class="explain amber" style="margin-top:10px"><div class="ex-icon">⚠</div><div><b>逻辑回归只有 59.1% 为什么还留着？</b> 它虽然单独不准，但输出的概率是经过校准的——可以用来"修正"其他模型过于自信的判断。像一个谨慎的顾问，虽不擅长决策，但能指出别人哪里太激进了。</div></div>
+  </div>
+</div>
+
+<!-- PHASE 6 -->
+<div class="panel" id="p5" style="display:none">
+  <div class="panel-header"><div class="icon purple">🎯</div>Layer 3 · 市场状态判断 & 分状态训练</div>
+  <div class="panel-body">
+    <div class="explain blue"><div class="ex-icon">💡</div><div><b>这是在做什么？</b> 牛市和熊市的逻辑完全不同——牛市的"RSI超买"信号可能是加仓机会，熊市可能是逃命信号。系统先自动判断当前市场处于什么状态（牛/熊/震荡/高波动），然后用对应状态的专属模型做预测。</div></div>
+    <div class="vs">
+      <div class="vc"><div class="v-label">趋势强度 Trend Strength</div><div class="v-value">0.0081</div><div class="v-desc">计算方式：(MA5−MA20)÷MA20<br>|0.0081| &lt; 0.015<br>→ 判定为 <b>📊 震荡市 (Range)</b><br>市场没有明显方向</div></div>
+      <div class="vc"><div class="v-label">30日波动率 Volatility</div><div class="v-value">0.0184</div><div class="v-desc">p75 阈值 = 0.024<br>0.0184 &lt; 0.024<br>→ 判定为 <b>正常波动</b><br>非高波动状态</div></div>
+    </div>
+    <div class="sec-label"><span class="sec-tag done">4 / 4 完成</span> 制度模型 Regime Models</div>
+    <div class="model-grid">
+      <div class="mc done"><div class="m-name">🐂 Bull · 牛市</div><div class="m-meta">486 训练样本</div></div>
+      <div class="mc done"><div class="m-name">🐻 Bear · 熊市</div><div class="m-meta">312 训练样本</div></div>
+      <div class="mc done" style="background:rgba(13,144,79,.03)"><div class="m-name">📊 Range · 震荡 ← 当前激活</div><div class="m-meta">298 训练样本 · 当前用这个</div></div>
+      <div class="mc done"><div class="m-name">⚡ High Vol · 高波动</div><div class="m-meta">147 训练样本</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- PHASE 7 -->
+<div class="panel" id="p6" style="display:none">
+  <div class="panel-header"><div class="icon purple">🧠</div>LSTM 深度学习 — 让神经网络理解"时间顺序"</div>
+  <div class="panel-body">
+    <div class="explain blue"><div class="ex-icon">💡</div><div><b>这是在做什么？</b> 前面的树模型能"看指标做判断"，但无法理解时间顺序——比如先跌后涨和先涨后跌在树模型看来是一样的。LSTM 是一种能记住顺序的神经网络，它会"记住"前面发生了什么，理解因果关系。</div></div>
+    <div style="font-size:12px;color:var(--sx);line-height:1.6;margin-bottom:10px">
+      网络结构（从输入到输出）：<br>
+      输入(20天×90特征) → <b>LSTM(128单元)</b> → Dropout(30%) → BatchNorm → <b>LSTM(64单元)</b> → Dropout(30%) → Dense(32,ReLU) → Dense(1,Sigmoid) → <b>输出概率</b><br>
+      总参数: ~45K · 优化器: Adam(lr=0.001, 衰减) · 损失: BinaryCrossentropy · 早停: patience=10 轮无提升即停止
+    </div>
+    <div class="lchart-legend"><span><div class="swatch" style="background:var(--bl)"></div>训练损失 (越低越好 — 模型"学得怎么样")</span><span><div class="swatch" style="background:var(--gn)"></div>验证损失 (越低越好 — 模型对"新数据"猜得准不准)</span></div>
+    <div class="lchart">
+      <div class="lbar train" style="height:48px" tip="E1 train=0.89"></div><div class="lbar val" style="height:50px" tip="E1 val=0.91"></div>
+      <div class="lbar train" style="height:38px" tip="E5 train=0.61"></div><div class="lbar val" style="height:41px" tip="E5 val=0.67"></div>
+      <div class="lbar train" style="height:30px" tip="E10 train=0.45"></div><div class="lbar val" style="height:34px" tip="E10 val=0.48"></div>
+      <div class="lbar train" style="height:23px" tip="E15 train=0.36"></div><div class="lbar val" style="height:28px" tip="E15 val=0.40"></div>
+      <div class="lbar train" style="height:17px" tip="E20 train=0.30"></div><div class="lbar val" style="height:24px" tip="E20 val=0.36"></div>
+      <div class="lbar train" style="height:13px;opacity:.6" tip="E25 train=0.26 ★最佳验证"></div><div class="lbar val" style="height:21px;opacity:.9" tip="E25 val=0.26 ★best"></div>
+      <div class="lbar train" style="height:10px;opacity:.4" tip="E30 train=0.23"></div><div class="lbar val" style="height:20px;opacity:.5" tip="E30 val=0.28"></div>
+      <div class="lbar train" style="height:8px;opacity:.3" tip="E35 train=0.21 ⚠早停触发"></div><div class="lbar val" style="height:19px;opacity:.3" tip="E35 val=0.27 ⚠未改善"></div>
+    </div>
+    <div class="explain amber" style="margin-top:10px"><div class="ex-icon">⚠</div><div><b>"早停" (Early Stopping) 是什么？</b> 看图——训练损失一直在降（蓝色越来越矮），但验证损失在第 25 轮后不再下降了（绿色不再变矮）。这意味着模型开始"死记硬背"训练数据，而不是真正学习了规律——这叫过拟合。早停策略在连续 10 轮无提升后自动停止，保护模型不过拟合。这一轮在第 35 轮触发，实际最优在第 25 轮。</div></div>
+  </div>
+</div>
+
+<!-- PHASE 8 -->
+<div class="panel" id="p7" style="display:none">
+  <div class="panel-header"><div class="icon amber">⚖️</div>权重自动学习 — 系统自己决定"谁说话更算数"</div>
+  <div class="panel-body">
+    <div class="explain blue"><div class="ex-icon">💡</div><div><b>这是在做什么？</b> 三层模型各有判断。现在的问题是：汇总的时候，谁的权重更大？就像评委打分，表现好的评委应该有更高的话语权。系统用验证集上的实际表现来自动学习每层的最优权重。</div></div>
+    <div class="step expanded"><div class="st-icon done">✓</div><div class="st-body"><div class="st-head"><div class="st-name">层内权重 — 同一层内各模型谁更靠谱？(Stacking 堆叠法)</div><div class="st-time">1.2s</div></div><div class="st-detail">用逻辑回归当裁判，基于验证集表现自动分配：
+Layer 1 内部: RF=34% · GB=33% · LGB=33%（三者水平接近，各 1/3）
+Layer 2 内部: ET=21% · LR=14% · SVM=18% · XGB=25% · CB=22%（XGB 最高）</div></div></div>
+    <div class="step expanded"><div class="st-icon done">✓</div><div class="st-body"><div class="st-head"><div class="st-name">层间权重 — 三层之间谁更靠谱？(Grid Search 网格搜索)</div><div class="st-time">0.6s</div></div><div class="st-detail">尝试不同权重组合，选验证集上表现最好的：
+  (0.33, 0.33, 0.33) → 综合准确率 69.1%
+  (0.30, 0.40, 0.30) → 综合准确率 70.3%
+  <b>(0.38, 0.42, 0.20) → 综合准确率 71.5% ← 最优!</b>
+  (0.40, 0.40, 0.20) → 综合准确率 70.8%
+
+最终: baseline=<b>38%</b> · enhanced=<b>42%</b> · regime=<b>20%</b></div></div></div>
+    <div class="explain amber"><div class="ex-icon">💡</div><div><b>为什么制度层只有 20%？</b> 当前是震荡市，震荡市的训练样本最少（只有 298 天），所以制度模型在验证集上表现不如基线层和增强层——系统自动降低了它的权重。</div></div>
+  </div>
+</div>
+
+<!-- PHASE 9 -->
+<div class="panel" id="p8" style="display:none">
+  <div class="panel-header"><div class="icon green">📈</div>特征重要性 — 哪些指标真正影响了预测？</div>
+  <div class="panel-body">
+    <div class="explain blue"><div class="ex-icon">💡</div><div><b>这是在做什么？</b> 90 个特征不可能同等重要。系统自动计算每个特征的"贡献度"——就像篮球赛看每个球员的得分占比。知道哪些特征最重要，我们就能理解模型"在想什么"。</div></div>
+    <div class="fbar"><div class="f-name">price_change_5d</div><div class="f-track"><div class="f-fill" style="width:100%"></div></div><div class="f-val">0.084</div><div class="f-desc">近5日涨跌幅 🥇</div></div>
+    <div class="fbar"><div class="f-name">rsi</div><div class="f-track"><div class="f-fill" style="width:92%"></div></div><div class="f-val">0.077</div><div class="f-desc">相对强弱指数</div></div>
+    <div class="fbar"><div class="f-name">trend_strength</div><div class="f-track"><div class="f-fill" style="width:88%"></div></div><div class="f-val">0.074</div><div class="f-desc">趋势强度</div></div>
+    <div class="fbar"><div class="f-name">volume_ratio</div><div class="f-track"><div class="f-fill" style="width:81%"></div></div><div class="f-val">0.068</div><div class="f-desc">成交量比率</div></div>
+    <div class="fbar"><div class="f-name">macd</div><div class="f-track"><div class="f-fill" style="width:76%"></div></div><div class="f-val">0.064</div><div class="f-desc">MACD 线</div></div>
+    <div class="fbar"><div class="f-name">bb_position</div><div class="f-track"><div class="f-fill" style="width:70%"></div></div><div class="f-val">0.059</div><div class="f-desc">布林带位置</div></div>
+    <div class="fbar"><div class="f-name">mfi</div><div class="f-track"><div class="f-fill" style="width:64%"></div></div><div class="f-val">0.054</div><div class="f-desc">资金流量指数</div></div>
+    <div class="fbar"><div class="f-name">atr_ratio</div><div class="f-track"><div class="f-fill" style="width:58%"></div></div><div class="f-val">0.049</div><div class="f-desc">ATR 比率</div></div>
+    <div class="fbar"><div class="f-name">yang_zhang_vol</div><div class="f-track"><div class="f-fill" style="width:52%"></div></div><div class="f-val">0.044</div><div class="f-desc">杨-张波动率</div></div>
+    <div class="fbar"><div class="f-name">rolling_skew_20</div><div class="f-track"><div class="f-fill" style="width:46%"></div></div><div class="f-val">0.039</div><div class="f-desc">20日偏度</div></div>
+    <div class="fbar"><div class="f-name">composite_signal</div><div class="f-track"><div class="f-fill" style="width:40%"></div></div><div class="f-val">0.034</div><div class="f-desc">综合信号</div></div>
+    <div class="fbar"><div class="f-name">obv_ratio</div><div class="f-track"><div class="f-fill" style="width:35%"></div></div><div class="f-val">0.029</div><div class="f-desc">OBV 比率</div></div>
+    <div class="explain purple" style="margin-top:12px"><div class="ex-icon">💡</div><div><b>解读</b>：近 5 日涨跌幅排第一——说明短期价格走势对预测影响最大，符合直觉。RSI 和趋势强度紧随其后。量价配合（volume_ratio 排第 4）也是关键信号。</div></div>
+  </div>
+</div>
+
+<!-- PHASE 10 -->
+<div class="panel" id="p9" style="display:none">
+  <div class="panel-header"><div class="icon green">🎯</div>最终综合决策</div>
+  <div class="panel-body">
+    <div class="explain blue"><div class="ex-icon">💡</div><div><b>最终结论怎么来的？</b> 三层模型各自算出"上涨概率"，按上一步学到的权重加权平均。结果 >50% 看涨，<50% 看跌。最后过一遍 Platt 校准修正概率偏差。</div></div>
+    <table class="dt">
+      <tr><th style="width:15%">层级</th><th style="width:35%">模型</th><th style="width:10%" class="num">权重</th><th style="width:15%" class="num">P(涨)</th><th>说明</th></tr>
+      <tr><td><b>Layer 1</b><br><span style="font-size:11px;color:var(--mx)">基线层</span></td><td>RF(68.2%) + GB(65.3%) + LGB(67.1%)</td><td class="num" style="color:var(--bl);font-weight:700">38%</td><td class="num highlight" style="color:var(--bl)">62.1%</td><td>3/3 模型均偏多</td></tr>
+      <tr><td><b>Layer 2</b><br><span style="font-size:11px;color:var(--mx)">增强层</span></td><td>ET(64.3%) + LR(59.1%) + SVM(62.2%) + XGB(66.5%) + CB(65.5%)</td><td class="num" style="color:var(--bl);font-weight:700">42%</td><td class="num highlight" style="color:var(--bl)">58.7%</td><td>3/5偏多 2/5偏空</td></tr>
+      <tr><td><b>Layer 3</b><br><span style="font-size:11px;color:var(--mx)">制度层</span></td><td>震荡市专用模型 (Range Model · 298样本)</td><td class="num" style="color:var(--bl);font-weight:700">20%</td><td class="num highlight" style="color:var(--bl)">51.3%</td><td>震荡市方向不确定</td></tr>
+      <tr style="border-top:2px solid var(--tx)"><td colspan="2"><b>加权 + Platt 校准</b></td><td class="num" style="font-weight:700">100%</td><td class="num highlight" style="font-size:18px;color:var(--bl);font-weight:700">57.8%</td><td>校准后略有下调</td></tr>
+    </table>
+    <div class="explain amber" style="margin-top:12px"><div class="ex-icon">📊</div><div><b>最终判定: HOLD（建议观望）</b><br>综合上涨概率 57.8%，虽然超过 50% 阈值但优势很小（仅偏多 15.6 个百分点）。Layer 3 判断当前是震荡市、方向不明，权重被自动降到 20%。建议等待更强信号（趋势突破、量能放大）再入场。</div></div>
+    <div class="console" style="margin-top:8px"><span class="ts">14:37:00</span><span class="ok">[完成]</span> 总耗时 72.1s · 8 ML + 4 Regime + LSTM(早停@35/50)<br><span class="ts">14:37:00</span><span class="ok">[缓存]</span> 结果已缓存 (TTL=600s) · 下次同样参数秒出<br><span class="ts">14:37:00</span><span class="in">[预测]</span> 000001 平安银行 · horizon=5天 · direction=偏多 · confidence=57.8%</div>
+  </div>
+</div>
+
+</div></div>
+
+<script>
+let speed=1,paused=false,timer=null,phase=0;
+const ids=['p0','p1','p2','p3','p4','p5','p6','p7','p8','p9'];
+const delay=[3500,4500,3000,4000,4500,3500,5500,3500,3500,0];
+
+function show(i){
+  ids.forEach((id,j)=>document.getElementById(id).style.display=j===i?'':'none');
+  document.querySelectorAll('#sidebar .si').forEach((el,j)=>{
+    el.classList.remove('current','done');
+    if(j===i)el.classList.add('current');
+    if(j<i)el.classList.add('done');
+    const dot=el.querySelector('.indicator');
+    dot.classList.remove('pending','running','done');
+    if(j<i)dot.classList.add('done');
+    else if(j===i)dot.classList.add('running');
+    else dot.classList.add('pending');
+  });
+  phase=i;
+}
+
+function next(){
+  if(paused){timer=setTimeout(next,400);return;}
+  if(phase>=ids.length-1){
+    const b=document.getElementById('statusBadge');
+    b.textContent='✓ 完成';b.className='badge done';
+    b.style.animation='none';
+    document.getElementById('cancelBtn').disabled=true;
+    return;
+  }
+  timer=setTimeout(()=>{show(phase+1);next();},Math.max(600,delay[phase]/speed));
+}
+
+function setSpeed(s){speed=s;document.querySelectorAll('.topbar .btn').forEach(b=>b.classList.remove('active'));event.target.classList.add('active');}
+function togglePause(){paused=!paused;document.getElementById('pauseBtn').textContent=paused?'▶ 继续':'⏸ 暂停';}
+function simCancel(){
+  clearTimeout(timer);
+  const b=document.getElementById('statusBadge');
+  b.textContent='✕ 已取消';b.className='badge cancelled';
+  b.style.animation='none';
+  document.getElementById('cancelBtn').disabled=true;
+}
+
+document.querySelectorAll('#sidebar .si').forEach((el,i)=>{el.addEventListener('click',()=>{clearTimeout(timer);show(i)});});
+document.querySelectorAll('.step').forEach(s=>{s.addEventListener('click',()=>s.classList.toggle('expanded'))});
+document.querySelectorAll('.mc').forEach(m=>{m.addEventListener('click',e=>{e.stopPropagation();m.classList.toggle('expanded')})});
+show(0);next();
+</script>
+</body>
+</html>

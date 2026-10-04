@@ -78,7 +78,12 @@ def main():
         return
 
     frontend = _start_frontend(project_root, logs_dir)
-    time.sleep(8)
+    print("Waiting for frontend (React compile may take 30-90s)...")
+    for _ in range(24):
+        time.sleep(5)
+        if frontend.poll() is not None:
+            break
+        # optional: could check port 3000 here
     if frontend.poll() is not None:
         print("Frontend failed to start.")
         backend.terminate()

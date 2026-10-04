@@ -35,7 +35,7 @@ Start-Process -FilePath "py" -ArgumentList "-3", "app.py" `
   -RedirectStandardOutput $backendOut `
   -RedirectStandardError $backendErr
 
-Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "npm start" `
+Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "set BROWSER=none&& set HOST=0.0.0.0&& npm start" `
   -WorkingDirectory (Join-Path $ProjectRoot "frontend") `
   -WindowStyle Hidden `
   -RedirectStandardOutput $frontendOut `
