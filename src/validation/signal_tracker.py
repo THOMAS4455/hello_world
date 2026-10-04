@@ -47,13 +47,31 @@ class SignalTracker:
         up_threshold: float,
         ensemble_up: Optional[float] = None,
         user_id: Optional[int] = None,
+        label_mode: str = "fixed_horizon",
     ) -> str:
+        """Record one prediction signal.
+
+        Idempotent per (symbol, horizon, calendar day) while unresolved: repeated
+        predictions served from cache would otherwise inflate the live sample.
+        Returns the id of the existing entry when the call is a no-op.
+        """
         with self._lock:
             payload = self._load()
+            symbol = str(symbol).strip()
+            today = datetime.now().strftime("%Y-%m-%d")
+            for existing in payload.get("logs", []):
+                same_key = (
+                    str(existing.get("symbol", "")).strip() == symbol
+                    and int(existing.get("horizon", 0)) == int(horizon)
+                    and str(existing.get("recorded_date", ""))[:10] == today
+                )
+                if same_key and not existing.get("outcome_resolved"):
+                    return str(existing.get("id"))
             log_id = str(uuid.uuid4())
             entry = {
                 "id": log_id,
-                "symbol": str(symbol).strip(),
+                "symbol": symbol,
+                "label_mode": label_mode,
                 "prediction": int(prediction),
                 "direction": direction,
                 "confidence": float(confidence),

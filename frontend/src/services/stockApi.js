@@ -462,6 +462,14 @@ class StockApiService {
     return response?.data || null;
   }
 
+  async getLivePerformance(minSamples = 200) {
+    const response = await this.request('/api/investment/live-performance', {
+      method: 'GET',
+      params: { min_samples: minSamples },
+    });
+    return response?.data || null;
+  }
+
   async runDailyScreener(options = {}) {
     const response = await this.request('/api/investment/screener/run', {
       method: 'POST',

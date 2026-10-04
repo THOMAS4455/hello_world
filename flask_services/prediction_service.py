@@ -2,6 +2,7 @@
 Prediction service for stock forecasting and backtesting.
 """
 
+import logging
 import sys
 import time
 import threading
@@ -16,6 +17,8 @@ import pandas as pd
 
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root / "src"))
+
+logger = logging.getLogger(__name__)
 
 
 class PredictionService:
@@ -444,10 +447,12 @@ class PredictionService:
                 horizon=int(result.get("horizon", 5)),
                 up_threshold=float(result.get("up_threshold", 0.02)),
                 ensemble_up=layer.get("ensemble_up"),
+                label_mode=str(result.get("label_mode") or "fixed_horizon"),
             )
             investment_service._resolve_signals_lazy()
-        except Exception:
-            pass
+        except Exception as exc:
+            # Never fatal, but never silent either: a lost sample is lost evidence.
+            logger.warning("failed to record signal for %s: %s", result.get("symbol"), exc)
 
     def backtest_strategy(
         self,

@@ -12,6 +12,21 @@ const InsightsPage = () => {
 
   const [brief, setBrief] = useState(null);
   const [briefLoading, setBriefLoading] = useState(false);
+  const [livePerf, setLivePerf] = useState(null);
+  const [liveLoading, setLiveLoading] = useState(false);
+
+  const loadLivePerformance = async () => {
+    setLiveLoading(true);
+    clearError();
+    try {
+      const data = await stockApiService.getLivePerformance();
+      setLivePerf(data);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLiveLoading(false);
+    }
+  };
 
   const loadBrief = async () => {
     setBriefLoading(true);
@@ -27,6 +42,55 @@ const InsightsPage = () => {
   };
 
   return (
+    <>
+      <Card className="investment-panel mb-3">
+        <Card.Header className="d-flex justify-content-between align-items-center">
+          <span>{isEnglish ? 'Live validation (edge vs baseline)' : '实盘验证（相对基线 edge）'}</span>
+          <Button size="sm" variant="outline-primary" onClick={loadLivePerformance} disabled={liveLoading}>
+            {liveLoading ? (isEnglish ? 'Loading...' : '加载中...') : isEnglish ? 'Refresh' : '刷新'}
+          </Button>
+        </Card.Header>
+        <Card.Body>
+          {!livePerf ? (
+            <div className="text-muted">
+              {isEnglish
+                ? 'Metrics come from resolved signals. Small samples are reported as insufficient, never as an improvement.'
+                : '指标基于已结算信号计算。样本不足时只标注「样本不足」，不给出任何提升结论。'}
+            </div>
+          ) : (
+            <>
+              <div className="ds-metrics-grid mb-3">
+                <div className="investment-metric-card">
+                  <div className="investment-metric-label">{isEnglish ? 'Resolved' : '已结算'}</div>
+                  <div className="investment-metric-value">{livePerf.n_resolved}</div>
+                </div>
+                <div className="investment-metric-card">
+                  <div className="investment-metric-label">{isEnglish ? 'Edge vs baseline' : '相对基线 edge'}</div>
+                  <div className={'investment-metric-value ' + ((livePerf.edge || 0) >= 0 ? 'market-up' : 'market-down')}>
+                    {livePerf.edge == null ? '—' : fmtPct(livePerf.edge)}
+                  </div>
+                </div>
+                <div className="investment-metric-card">
+                  <div className="investment-metric-label">{isEnglish ? 'Majority baseline' : '多数类基线'}</div>
+                  <div className="investment-metric-value">
+                    {livePerf.baseline_accuracy == null ? '—' : fmtPct(livePerf.baseline_accuracy)}
+                  </div>
+                </div>
+                <div className="investment-metric-card">
+                  <div className="investment-metric-label">{isEnglish ? 'Sample' : '样本判定'}</div>
+                  <div className="investment-metric-value">
+                    {livePerf.insufficient_n
+                      ? (isEnglish ? 'Insufficient' : '样本不足')
+                      : (isEnglish ? 'Adequate' : '充足')}
+                  </div>
+                </div>
+              </div>
+              <p className="text-muted small">{livePerf.message}</p>
+            </>
+          )}
+        </Card.Body>
+      </Card>
+
     <Card className="investment-panel mb-3">
       <Card.Header className="d-flex justify-content-between align-items-center">
         <span>{isEnglish ? 'Daily brief' : '每日简报'}</span>
@@ -110,6 +174,7 @@ const InsightsPage = () => {
         )}
       </Card.Body>
     </Card>
+    </>
   );
 };
 

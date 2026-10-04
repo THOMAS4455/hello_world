@@ -229,6 +229,23 @@ async def get_portfolio_report(
         return error_response(str(exc))
 
 
+@router.get("/api/investment/live-performance")
+async def get_live_performance(min_samples: int = Query(default=200, ge=1, le=100000)):
+    """Rolling live-validation metrics for the recorded prediction signals.
+
+    Read-only and network-free: computed from data/signal_logs.json.
+    """
+    try:
+        data = await run_blocking(
+            investment_service.get_live_performance, min_samples, timeout=15.0
+        )
+        return success_response(data)
+    except ServiceError:
+        raise
+    except Exception as exc:
+        return error_response(str(exc))
+
+
 @router.get("/api/investment/daily-brief")
 async def get_daily_brief(authorization: Optional[str] = Header(default=None)):
     try:

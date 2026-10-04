@@ -5,6 +5,7 @@ Investment workspace: watchlist, portfolio backtest, paper trading, signal stats
 from __future__ import annotations
 
 import json
+import logging
 import sys
 import threading
 import time
@@ -30,6 +31,8 @@ from research.decision_engine import analyze_holding, build_candidate_report, bu
 from research import screener_config as SC
 
 from flask_services.investment_repository import JsonInvestmentRepository
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_CONFIG = {
@@ -490,6 +493,22 @@ class InvestmentService:
                 )
         return stats
 
+    def get_live_performance(self, min_samples: int = 200) -> Dict[str, Any]:
+        """Full-population live performance over every resolved signal.
+
+        Metric of record is EDGE = accuracy - majority-class baseline, because
+        plain accuracy on the fixed-horizon label is dominated by class
+        imbalance (60-90% of days are labelled 0). Below min_samples the payload
+        is flagged insufficient_n and no improvement may be inferred.
+        """
+        from validation.performance_report import build_report, load_resolved_logs
+
+        payload = load_resolved_logs()
+        report = build_report(payload["resolved"], min_samples=int(min_samples))
+        report["n_pending"] = payload["pending"]
+        report["n_total_logs"] = payload["total"]
+        return report
+
     def get_daily_brief(self, user_id: int) -> Dict[str, Any]:
         watch = self.get_watchlist(user_id)
         symbols = watch.get("symbols") or []
@@ -693,6 +712,7 @@ class InvestmentService:
 
         up_picks: List[Dict[str, Any]] = []
         fallback_picks: List[Dict[str, Any]] = []
+        pred_by_symbol: Dict[str, Any] = {}
         for cand in candidates:
             symbol = cand["symbol"]
             try:
@@ -700,6 +720,7 @@ class InvestmentService:
             except Exception as exc:
                 skipped.append({"symbol": symbol, "error": str(exc)})
                 continue
+            pred_by_symbol[symbol] = pred
             direction = str(pred.get("direction") or "")
             confidence = float(pred.get("confidence") or 0)
             ensemble_up = float((pred.get("layer_outputs") or {}).get("ensemble_up") or 0)
@@ -733,6 +754,31 @@ class InvestmentService:
             picks.extend(fallback_picks[: int(top_n) - len(picks)])
         picks.sort(key=lambda x: x["rank_score"], reverse=True)
 
+        # Record one signal per pick so the live-validation sample keeps growing
+        # even when nobody triggers a prediction through the API by hand. The
+        # tracker is idempotent per (symbol, horizon, day), so re-running the
+        # screener on the same day does not duplicate rows.
+        recorded = 0
+        for plan in picks:
+            symbol = str(plan.get("symbol") or "").strip()
+            pred = pred_by_symbol.get(symbol)
+            if not pred:
+                continue
+            try:
+                self.signal_tracker.record(
+                    symbol=symbol,
+                    prediction=int(pred.get("prediction", 0)),
+                    direction=str(pred.get("direction") or ""),
+                    confidence=float(pred.get("confidence") or 0),
+                    horizon=int(pred.get("horizon", 5) or 5),
+                    up_threshold=float(pred.get("up_threshold", 0.02) or 0.02),
+                    ensemble_up=(pred.get("layer_outputs") or {}).get("ensemble_up"),
+                    label_mode="fixed_horizon",
+                )
+                recorded += 1
+            except Exception as exc:
+                logger.warning("failed to record screener signal for %s: %s", symbol, exc)
+
         payload = {
             "generated_at": datetime.now().isoformat(),
             "top_n": int(top_n),
@@ -743,6 +789,7 @@ class InvestmentService:
                 "pool": len(pool),
                 "loaded": len(histories),
                 "picked": len(picks),
+                "recorded_signals": recorded,
             },
             "picks": picks,
             "skipped": skipped,
