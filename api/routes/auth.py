@@ -22,6 +22,8 @@ async def auth_register(request: RegisterRequest):
             timeout=15.0,
         )
         return success_response({"user": user}, "注册成功")
+    except ServiceError:
+        raise
     except Exception as exc:
         return error_response(str(exc))
 
@@ -36,6 +38,8 @@ async def auth_login(request: LoginRequest):
             timeout=15.0,
         )
         return success_response(payload, "登录成功")
+    except ServiceError:
+        raise
     except Exception as exc:
         return error_response(str(exc))
 
@@ -49,6 +53,8 @@ async def auth_refresh(request: RefreshTokenRequest):
             timeout=15.0,
         )
         return success_response(payload, "Session refreshed")
+    except ServiceError:
+        raise
     except Exception as exc:
         return error_response(str(exc))
 

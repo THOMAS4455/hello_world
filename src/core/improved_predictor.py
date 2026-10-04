@@ -25,6 +25,31 @@ from sklearn.model_selection import TimeSeriesSplit, cross_val_score
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 
+# Import trading constraints for PnL backtest simulation
+try:
+    from trading.constraints import TradingConstraints
+except ImportError:
+    TradingConstraints = None  # type: ignore[assignment]
+
+# Import gradient boosting libraries (with fallback if not installed)
+try:
+    import lightgbm as lgb
+    LIGHTGBM_AVAILABLE = True
+except ImportError:
+    LIGHTGBM_AVAILABLE = False
+
+try:
+    import xgboost as xgb
+    XGBOOST_AVAILABLE = True
+except ImportError:
+    XGBOOST_AVAILABLE = False
+
+try:
+    import catboost as cb
+    CATBOOST_AVAILABLE = True
+except ImportError:
+    CATBOOST_AVAILABLE = False
+
 warnings.filterwarnings("ignore")
 
 
@@ -53,31 +78,141 @@ def align_features_and_labels(
     return aligned_features, aligned_labels
 
 
-SENTIMENT_COLUMNS = [
-    "sentiment_score_lag1",
-    "sentiment_confidence_lag1",
-    "positive_ratio_lag1",
-    "negative_ratio_lag1",
-    "market_breadth_lag1",
-    "target_match_count_lag1",
-    "sentiment_decay_lag1",
-    "sentiment_available",
-]
-
-
 class ImprovedPredictor:
-    def __init__(self) -> None:
+    def __init__(self, learn_weights: bool = True) -> None:
+        """
+        Initialize ImprovedPredictor with weight learning and LSTM support
+        
+        Args:
+            learn_weights: If True, learn ensemble weights from validation data (recommended).
+                          If False, use fixed weights (0.35, 0.40, 0.25).
+        """
+        # Weight learning configuration
+        self.learn_weights = learn_weights
+        self.within_layer_weights: Dict[str, Dict[str, float]] = {}
+        self.learned_layer_weights: Dict[str, float] = {}
+        
+        # Try to import LSTM model
+        self.lstm_model = None
+        self.lstm_enabled = False
+        try:
+            from .lstm_model import LSTMPredictor, TENSORFLOW_AVAILABLE
+            if TENSORFLOW_AVAILABLE:
+                self.lstm_model = LSTMPredictor(
+                    sequence_length=10,
+                    units=64,
+                    dropout_rate=0.3,
+                    learning_rate=0.001
+                )
+                self.lstm_enabled = True
+        except (ImportError, Exception):
+            pass
+        
+        # Try to import weight optimizer
+        try:
+            from .weight_optimizer import hierarchical_weight_optimization
+            self._hierarchical_weight_optimization = hierarchical_weight_optimization
+            self.weight_optimizer_available = True
+        except (ImportError, Exception):
+            self.weight_optimizer_available = False
+        
+        # Balanced regularization: strong enough to avoid overfitting, but enough capacity to learn
         self.layer_models = {
             "baseline": {
-                "rf": RandomForestClassifier(n_estimators=160, random_state=42),
-                "gb": GradientBoostingClassifier(n_estimators=160, random_state=42),
+                "rf": RandomForestClassifier(
+                    n_estimators=150,
+                    max_depth=12,
+                    min_samples_split=10,
+                    min_samples_leaf=5,
+                    max_features='sqrt',
+                    class_weight='balanced',
+                    random_state=42,
+                ),
+                "gb": GradientBoostingClassifier(
+                    n_estimators=120,
+                    learning_rate=0.05,
+                    max_depth=5,
+                    min_samples_split=10,
+                    min_samples_leaf=5,
+                    subsample=0.75,
+                    random_state=42,
+                ),
             },
             "enhanced": {
-                "extra_trees": ExtraTreesClassifier(n_estimators=220, random_state=42),
-                "log_reg": LogisticRegression(max_iter=2000, random_state=42),
-                "svm": SVC(kernel="rbf", probability=True, random_state=42),
+                "extra_trees": ExtraTreesClassifier(
+                    n_estimators=150,
+                    max_depth=12,
+                    min_samples_split=10,
+                    min_samples_leaf=5,
+                    max_features='sqrt',
+                    class_weight='balanced',
+                    random_state=42,
+                ),
+                "log_reg": LogisticRegression(
+                    C=0.5,
+                    class_weight='balanced',
+                    max_iter=2000,
+                    random_state=42,
+                ),
+                "svm": SVC(
+                    kernel="rbf",
+                    C=0.5,
+                    gamma='scale',
+                    class_weight='balanced',
+                    probability=True,
+                    random_state=42,
+                ),
             },
         }
+
+        if LIGHTGBM_AVAILABLE:
+            self.layer_models["baseline"]["lgb"] = lgb.LGBMClassifier(
+                n_estimators=150,
+                learning_rate=0.05,
+                max_depth=6,
+                num_leaves=20,
+                min_child_samples=20,
+                subsample=0.75,
+                colsample_bytree=0.75,
+                reg_alpha=1.0,
+                reg_lambda=2.0,
+                class_weight='balanced',
+                random_state=42,
+                verbose=-1,
+            )
+
+        if XGBOOST_AVAILABLE:
+            self.layer_models["enhanced"]["xgb"] = xgb.XGBClassifier(
+                n_estimators=150,
+                learning_rate=0.05,
+                max_depth=5,
+                min_child_weight=5,
+                gamma=0.2,
+                subsample=0.75,
+                colsample_bytree=0.75,
+                reg_alpha=1.0,
+                reg_lambda=2.0,
+                scale_pos_weight=2.0,
+                random_state=42,
+                eval_metric='logloss',
+                use_label_encoder=False,
+            )
+
+        if CATBOOST_AVAILABLE:
+            self.layer_models["enhanced"]["catboost"] = cb.CatBoostClassifier(
+                iterations=150,
+                learning_rate=0.05,
+                depth=5,
+                l2_leaf_reg=4.0,
+                bagging_temperature=0.3,
+                random_strength=0.2,
+                min_data_in_leaf=10,
+                auto_class_weights='Balanced',
+                random_state=42,
+                verbose=False,
+                allow_writing_files=False,
+            )
+        
         self.regime_models = {
             "bull": LogisticRegression(max_iter=2000, random_state=42),
             "bear": LogisticRegression(max_iter=2000, random_state=42),
@@ -90,18 +225,26 @@ class ImprovedPredictor:
         self.model_scores: Dict[str, Dict[str, float]] = {}
         self.layer_weights = {"baseline": 0.35, "enhanced": 0.4, "regime": 0.25}
         self.up_threshold = 0.02
+        self.label_method: str = "fixed_horizon"
+        self.stop_loss_pct: float | None = None
         self.trained_models: Dict[str, object] = {}
         self.trained_regime_models: Dict[str, object] = {}
         self.global_regime_fallback = LogisticRegression(max_iter=2000, random_state=42)
         self._train_vol_threshold: float = 0.0
         self.decision_threshold: float = 0.5
         self.probability_calibrator: LogisticRegression | None = None
+        self.feature_importance_scores: Dict[str, float] = {}
+        self.regime_decision_thresholds: Dict[str, float] = {}
+        self.active_feature_columns: List[str] = []
+        self.active_model_ids: set = set()
+        self.regime_entry_gates: Dict[str, float] = {
+            "bull": 0.33, "bear": 0.20, "range": 0.25, "high_vol": 0.28,
+        }
 
     def prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
         features = df.copy()
 
         features["ma5"] = features["close_price"].rolling(window=5).mean()
-        features["ma10"] = features["close_price"].rolling(window=10).mean()
         features["ma20"] = features["close_price"].rolling(window=20).mean()
         features["ma60"] = features["close_price"].rolling(window=60).mean()
 
@@ -140,16 +283,48 @@ class ImprovedPredictor:
         )
         features["ma60_gap"] = (features["close_price"] - features["ma60"]) / features["ma60"]
 
-        for col in SENTIMENT_COLUMNS:
-            if col not in features.columns:
-                features[col] = 0.0
-        features[SENTIMENT_COLUMNS] = features[SENTIMENT_COLUMNS].fillna(0.0)
+        # On-Balance Volume (OBV) — volume-price confirmation
+        price_dir = np.sign(features["close_price"].diff())
+        features["obv"] = (price_dir * features["volume"]).cumsum()
+        features["obv_ratio"] = features["obv"] / features["obv"].rolling(window=20).mean()
 
-        features = features.replace([np.inf, -np.inf], np.nan).dropna()
+        # Money Flow Index (MFI, 14-period) — volume-weighted RSI
+        typical_price = (
+            features["close_price"]
+            + features.get("high_price", features["close_price"])
+            + features.get("low_price", features["close_price"])
+        ) / 3
+        raw_mf = typical_price * features["volume"]
+        tp_diff = typical_price.diff()
+        pos_flow = raw_mf.where(tp_diff > 0, 0).rolling(window=14).sum()
+        neg_flow = raw_mf.where(tp_diff < 0, 0).rolling(window=14).sum()
+        features["mfi"] = 100 - (100 / (1 + pos_flow / neg_flow.replace(0, np.nan)))
+
+        # Average True Range (ATR, 14-period) — volatility normalization
+        prev_close = features["close_price"].shift(1)
+        tr1 = features.get("high_price", features["close_price"]) - features.get("low_price", features["close_price"])
+        tr2 = abs(features.get("high_price", features["close_price"]) - prev_close)
+        tr3 = abs(features.get("low_price", features["close_price"]) - prev_close)
+        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+        features["atr"] = tr.rolling(window=14).mean()
+        features["atr_ratio"] = features["atr"] / features["close_price"]
+
+        # Volatility-adjusted momentum (known alpha factor in A-shares)
+        for n in [20, 60, 120]:
+            mom = features["close_price"] / features["close_price"].shift(n) - 1.0
+            vol_n = features["price_change"].rolling(window=n).std()
+            features[f"vol_adj_mom_{n}"] = mom / (vol_n + 1e-9)
+
+        # Add advanced features
+        features = self._add_time_series_features(features)
+        features = self._add_cross_features(features)
+        features = self._add_microstructure_features(features)
+        
+        # Replace inf values with NaN
+        features = features.replace([np.inf, -np.inf], np.nan)
 
         base_columns = [
             "ma5",
-            "ma10",
             "ma20",
             "ma60",
             "price_change",
@@ -165,18 +340,217 @@ class ImprovedPredictor:
             "bb_position",
             "trend_strength",
             "ma60_gap",
+            "obv_ratio",
+            "mfi",
+            "atr_ratio",
+            "vol_adj_mom_20",
+            "vol_adj_mom_60",
+            "vol_adj_mom_120",
         ]
-        self.feature_columns = base_columns + SENTIMENT_COLUMNS
+
+        # Time-series features (9)
+        time_series_cols = [
+            "price_change_lag1", "price_change_lag5",
+            "volume_lag1",
+            "rolling_mean_20",
+            "rolling_std_20", "rolling_skew_20",
+            "ema20",
+            "price_autocorr_1"
+        ]
+        
+        # Cross features (13)
+        cross_cols = [
+            "price_change_x_volume_ratio", "volatility_x_volume", "rsi_x_volume_ratio",
+            "macd_x_volume",
+            "rsi_x_macd", "volatility_x_trend_strength", "volume_ratio_x_trend_strength",
+            "rsi_x_bb_position", "macd_x_trend_strength",
+            "volume_price_momentum", "volatility_regime",
+            "technical_momentum", "composite_signal"
+        ]
+        
+        # Microstructure features (15)
+        microstructure_cols = [
+            "high_low_spread", "open_close_spread", "intraday_range",
+            "volume_price_impact", "large_trade_indicator",
+            "buy_sell_imbalance_proxy", "tick_direction",
+            "amihud_illiquidity", "turnover_rate", "bid_ask_spread_proxy",
+            "realized_volatility", "garman_klass_volatility", "parkinson_volatility",
+            "rogers_satchell_volatility", "yang_zhang_volatility"
+        ]
+        
+        # Only include features that exist in the dataframe
+        time_series_cols = [col for col in time_series_cols if col in features.columns]
+        cross_cols = [col for col in cross_cols if col in features.columns]
+        microstructure_cols = [col for col in microstructure_cols if col in features.columns]
+        
+        self.feature_columns = base_columns + time_series_cols + cross_cols + microstructure_cols
+        
+        # Fill NaN values in feature columns
+        # Strategy: forward fill first, then backward fill, then fill with 0
+        for col in self.feature_columns:
+            if col in features.columns:
+                features[col] = features[col].fillna(method='ffill').fillna(method='bfill').fillna(0)
+        
+        # Drop remaining rows where feature columns still have NaN (should be rare now)
+        features = features.dropna(subset=self.feature_columns)
+        
+        return features
+
+    def _add_time_series_features(self, features: pd.DataFrame) -> pd.DataFrame:
+        """Add time-series features (9 features) - Task 2.4"""
+        # Lagged features (3)
+        features["price_change_lag1"] = features["price_change"].shift(1)
+        features["price_change_lag5"] = features["price_change"].shift(5)
+        features["volume_lag1"] = features["volume"].shift(1)
+
+        # Rolling statistics (3)
+        features["rolling_mean_20"] = features["close_price"].rolling(window=20).mean()
+        features["rolling_std_20"] = features["close_price"].rolling(window=20).std()
+        features["rolling_skew_20"] = features["close_price"].rolling(window=20).skew()
+
+        # Exponential moving average (1)
+        features["ema20"] = features["close_price"].ewm(span=20, adjust=False).mean()
+
+        # Autocorrelation (1)
+        features["price_autocorr_1"] = features["price_change"].rolling(window=20).apply(
+            lambda x: x.autocorr(lag=1) if len(x) > 1 else 0, raw=False
+        )
+
+        return features
+    
+    def _add_cross_features(self, features: pd.DataFrame) -> pd.DataFrame:
+        """Add cross-features (13 features) - Task 2.3"""
+        # Technical × Volume (6)
+        features["price_change_x_volume_ratio"] = features["price_change"] * features["volume_ratio"]
+        features["volatility_x_volume"] = features["volatility"] * features["volume"]
+        features["rsi_x_volume_ratio"] = features["rsi"] * features["volume_ratio"]
+        features["macd_x_volume"] = features["macd"] * features["volume_ratio"]
+        features["volume_ratio_x_trend_strength"] = features["volume_ratio"] * features["trend_strength"]
+        features["volume_price_momentum"] = features["volume_ratio"] * features["price_change"]
+
+        # Technical × Technical (4)
+        features["rsi_x_bb_position"] = features["rsi"] * features["bb_position"]
+        features["macd_x_trend_strength"] = features["macd"] * features["trend_strength"]
+        features["rsi_x_macd"] = features["rsi"] * features["macd"]
+        features["volatility_x_trend_strength"] = features["volatility"] * features["trend_strength"]
+
+        # Composite indicators (3)
+        features["volatility_regime"] = (features["volatility_30"] > features["volatility_30"].rolling(window=60).mean()).astype(float)
+        features["technical_momentum"] = features["rsi"] * features["macd"] * features["trend_strength"]
+        features["composite_signal"] = (features["rsi"] + features["macd"] * 10 + features["trend_strength"] * 100) / 3
+
+        return features
+    
+    def _add_microstructure_features(self, features: pd.DataFrame) -> pd.DataFrame:
+        """Add microstructure features (15 features) - Task 2.5"""
+        # Spread proxies (3)
+        if "high_price" in features.columns and "low_price" in features.columns:
+            features["high_low_spread"] = (features["high_price"] - features["low_price"]) / features["close_price"]
+        else:
+            features["high_low_spread"] = 0.01  # Default value
+            
+        if "open_price" in features.columns:
+            features["open_close_spread"] = (features["close_price"] - features["open_price"]) / features["close_price"]
+            features["intraday_range"] = abs(features["high_price"] - features["low_price"]) / features["open_price"] if "high_price" in features.columns else 0.01
+        else:
+            features["open_close_spread"] = 0.0
+            features["intraday_range"] = 0.01
+        
+        # Price impact (2)
+        features["volume_price_impact"] = features["price_change"] / (features["volume"] + 1e-6)
+        features["large_trade_indicator"] = (features["volume"] > features["volume"].rolling(window=20).mean() * 1.5).astype(float)
+        
+        # Order flow (2)
+        features["buy_sell_imbalance_proxy"] = features["price_change"] * features["volume"]
+        features["tick_direction"] = np.sign(features["price_change"])
+        
+        # Liquidity (3)
+        features["amihud_illiquidity"] = abs(features["price_change"]) / (features["volume"] + 1e-6)
+        features["turnover_rate"] = features["volume"] / features["volume"].rolling(window=20).mean()
+        features["bid_ask_spread_proxy"] = features["high_low_spread"]  # Proxy using high-low spread
+        
+        # Volatility patterns (5)
+        if "high_price" in features.columns and "low_price" in features.columns and "open_price" in features.columns:
+            # Realized volatility
+            features["realized_volatility"] = features["price_change"].rolling(window=20).std() * np.sqrt(252)
+            
+            # Garman-Klass volatility
+            hl = np.log(features["high_price"] / features["low_price"])
+            co = np.log(features["close_price"] / features["open_price"])
+            features["garman_klass_volatility"] = np.sqrt(0.5 * hl**2 - (2*np.log(2)-1) * co**2)
+            
+            # Parkinson volatility
+            features["parkinson_volatility"] = np.sqrt(hl**2 / (4 * np.log(2)))
+            
+            # Rogers-Satchell volatility
+            ho = np.log(features["high_price"] / features["open_price"])
+            lo = np.log(features["low_price"] / features["open_price"])
+            ch = np.log(features["close_price"] / features["high_price"])
+            cl = np.log(features["close_price"] / features["low_price"])
+            features["rogers_satchell_volatility"] = np.sqrt(ho * ch + lo * cl)
+            
+            # Yang-Zhang volatility (simplified)
+            features["yang_zhang_volatility"] = features["realized_volatility"] * 1.1  # Simplified approximation
+        else:
+            # Use simplified volatility if OHLC not available
+            features["realized_volatility"] = features["volatility"] * np.sqrt(252)
+            features["garman_klass_volatility"] = features["volatility"]
+            features["parkinson_volatility"] = features["volatility"]
+            features["rogers_satchell_volatility"] = features["volatility"]
+            features["yang_zhang_volatility"] = features["volatility"]
+        
         return features
 
     def prepare_labels(
-        self, df: pd.DataFrame, horizon: int = 5, up_threshold: float = 0.02
+        self, df: pd.DataFrame, horizon: int = 5, up_threshold: float = 0.02,
+        stop_loss_pct: float | None = None, label_method: str = "fixed_horizon",
     ) -> pd.Series:
+        if label_method == "triple_barrier":
+            return self._prepare_triple_barrier_labels(df, horizon, up_threshold, stop_loss_pct)
+
         future_return = df["close_price"].shift(-horizon) / df["close_price"] - 1
         labels = pd.Series(np.nan, index=df.index, dtype=float)
         valid = future_return.notna()
         labels.loc[valid] = (future_return.loc[valid] > up_threshold).astype(int)
         return labels
+
+    def _prepare_triple_barrier_labels(
+        self, df: pd.DataFrame, horizon: int, up_threshold: float, stop_loss_pct: float | None,
+    ) -> pd.Series:
+        closes = df["close_price"].values
+        n = len(closes)
+        labels_arr = np.full(n, np.nan)
+        stop_loss = stop_loss_pct if stop_loss_pct is not None else up_threshold
+
+        for t in range(n - 1):
+            entry = closes[t]
+            if entry <= 0:
+                labels_arr[t] = 0
+                continue
+            upper = entry * (1.0 + up_threshold)
+            lower = entry * (1.0 - stop_loss)
+            end = min(t + 1 + horizon, n)
+            window = closes[t + 1 : end]
+            if len(window) == 0:
+                labels_arr[t] = 0
+                continue
+            upper_hit = window >= upper
+            lower_hit = window <= lower
+            if upper_hit.any():
+                first_upper = int(np.argmax(upper_hit))
+                if lower_hit.any() and int(np.argmax(lower_hit)) < first_upper:
+                    labels_arr[t] = -1  # lower hit first
+                else:
+                    labels_arr[t] = 1   # upper hit first
+            elif lower_hit.any():
+                labels_arr[t] = -1
+            else:
+                labels_arr[t] = 0  # time barrier (no barrier hit)
+
+        # Map {-1, 0, 1} -> {0, 1} for binary classifiers: -1 -> 0, 1 -> 1
+        labels_series = pd.Series(labels_arr, index=df.index)
+        labels_series = labels_series.replace(-1, 0)
+        return labels_series
 
     def _derive_regime_labels(
         self, features_df: pd.DataFrame, vol_threshold: float | None = None
@@ -212,15 +586,14 @@ class ImprovedPredictor:
         return "range"
 
     def _eval_metrics(self, y_true, y_pred) -> Dict[str, float]:
+        """Overall accuracy; precision/recall/F1 for positive class (1 = future up)."""
         return {
             "accuracy": float(accuracy_score(y_true, y_pred)),
             "precision": float(
-                precision_score(y_true, y_pred, average="weighted", zero_division=0)
+                precision_score(y_true, y_pred, pos_label=1, zero_division=0)
             ),
-            "recall": float(
-                recall_score(y_true, y_pred, average="weighted", zero_division=0)
-            ),
-            "f1": float(f1_score(y_true, y_pred, average="weighted", zero_division=0)),
+            "recall": float(recall_score(y_true, y_pred, pos_label=1, zero_division=0)),
+            "f1": float(f1_score(y_true, y_pred, pos_label=1, zero_division=0)),
         }
 
     def _iter_all_models(self) -> List[Tuple[str, str, object]]:
@@ -236,7 +609,7 @@ class ImprovedPredictor:
         y_arr = y_true.to_numpy()
         best_t = 0.5
         best_acc = -1.0
-        for threshold in np.linspace(0.35, 0.65, 31):
+        for threshold in np.linspace(0.30, 0.65, 36):
             preds = (ensemble_probs > threshold).astype(int)
             acc = float(accuracy_score(y_arr, preds))
             if acc > best_acc:
@@ -254,6 +627,9 @@ class ImprovedPredictor:
         trained_models: Dict[str, object] = {}
         for layer_name, model_name, model in self._iter_all_models():
             model_inst = clone(model)
+            if y.nunique() < 2:
+                from sklearn.dummy import DummyClassifier
+                model_inst = DummyClassifier(strategy="most_frequent")
             model_inst.fit(X_scaled, y)
             trained_models[f"{layer_name}:{model_name}"] = model_inst
 
@@ -300,23 +676,31 @@ class ImprovedPredictor:
         X_scaled = scaler.transform(X)
         baseline_probs: List[np.ndarray] = []
         enhanced_probs: List[np.ndarray] = []
+        baseline_weights: List[float] = []
+        enhanced_weights: List[float] = []
 
         for model_id, model in trained_models.items():
+            if self.active_model_ids and model_id not in self.active_model_ids:
+                continue  # skip weak models
             layer = model_id.split(":", 1)[0]
             prob_up = model.predict_proba(X_scaled)[:, 1]
+            cv_w = max(0.0, self.model_scores.get(model_id, {}).get("cv_mean", 0.5) - 0.45)
+            weighted_prob = prob_up * cv_w
             if layer == "baseline":
-                baseline_probs.append(prob_up)
+                baseline_probs.append(weighted_prob)
+                baseline_weights.append(cv_w)
             else:
-                enhanced_probs.append(prob_up)
+                enhanced_probs.append(weighted_prob)
+                enhanced_weights.append(cv_w)
 
         baseline_up = (
-            np.mean(baseline_probs, axis=0)
-            if baseline_probs
+            np.average(np.array(baseline_probs), axis=0, weights=baseline_weights)
+            if baseline_probs and sum(baseline_weights) > 0
             else np.full(n_rows, 0.5)
         )
         enhanced_up = (
-            np.mean(enhanced_probs, axis=0)
-            if enhanced_probs
+            np.average(np.array(enhanced_probs), axis=0, weights=enhanced_weights)
+            if enhanced_probs and sum(enhanced_weights) > 0
             else np.full(n_rows, 0.5)
         )
 
@@ -354,6 +738,8 @@ class ImprovedPredictor:
     def _fit_validation_artifacts(
         self, X: pd.DataFrame, y: pd.Series, features_df: pd.DataFrame
     ) -> Tuple[float, LogisticRegression | None, Dict[str, float | bool]]:
+        if y.nunique() < 2:
+            return 0.5, None, {"enabled": False, "reason": "single_class"}
         val_n = max(20, min(80, int(len(X) * 0.15)))
         inner_end = len(X) - val_n
         if inner_end < 80:
@@ -399,6 +785,7 @@ class ImprovedPredictor:
         ensemble_probs: np.ndarray | None = None,
         decision_threshold: float = 0.5,
         min_confidence: float = 0.0,
+        constraints: "TradingConstraints | None" = None,
     ) -> Dict[str, Any]:
         closes = features_test["close_price"].astype(float).values
         if "price_change" in features_test.columns:
@@ -407,29 +794,119 @@ class ImprovedPredictor:
             price_change = np.diff(closes, prepend=closes[0]) / np.maximum(closes, 1e-9)
 
         n = len(signals)
-        prob_gate = max(float(decision_threshold), float(min_confidence))
-        position = np.zeros(n, dtype=float)
-        hold_remaining = 0
-        trade_signals = 0
-        for i, sig in enumerate(signals):
-            prob_up = (
-                float(ensemble_probs[i])
-                if ensemble_probs is not None and i < len(ensemble_probs)
-                else (1.0 if int(sig) == 1 else 0.0)
-            )
-            go_long = int(sig) == 1 and prob_up >= prob_gate
-            if hold_remaining > 0:
-                position[i] = 1.0
-                hold_remaining -= 1
-            elif go_long:
-                position[i] = 1.0
-                hold_remaining = max(0, int(horizon) - 1)
-                trade_signals += 1
+        prob_gate_floor = max(0.25, float(min_confidence))
 
-        entries = np.diff(position, prepend=0.0) > 0
-        daily_strategy = position * price_change - entries.astype(float) * transaction_cost
-        equity = np.cumprod(1.0 + daily_strategy)
-        buy_hold_equity = np.cumprod(1.0 + price_change)
+        # Per-side cost fractions: commission + transfer fee + (stamp tax on sell) + slippage.
+        # `transaction_cost` is reused as the per-side slippage fraction.
+        slippage = float(transaction_cost)
+        if constraints is not None and TradingConstraints is not None:
+            buy_cost = constraints.cost_rate("buy") + slippage
+            sell_cost = constraints.cost_rate("sell") + slippage
+        else:
+            buy_cost = sell_cost = slippage
+
+        # Simple on-the-fly regime detection from price data for adaptive entry gates
+        def _detect_regime(idx: int) -> str:
+            if idx < 20:
+                return "range"
+            lookback = closes[max(0, idx - 20):idx + 1]
+            ret_20d = lookback[-1] / lookback[0] - 1.0
+            vol_20d = float(np.std(np.diff(np.log(np.maximum(lookback, 1e-9)))))
+            if vol_20d > 0.03:
+                return "high_vol"
+            if ret_20d > 0.015:
+                return "bull"
+            if ret_20d < -0.015:
+                return "bear"
+            return "range"
+
+        # --- Constrained path (T+1, limit-up/down, slippage, stop-loss, confidence sizing) ---
+        if constraints is not None and TradingConstraints is not None:
+            prev_closes = np.concatenate([[closes[0]], closes[:-1]])
+            position = np.zeros(n, dtype=float)
+            hold_remaining = 0
+            trade_signals = 0
+            bought_today: set[int] = set()
+
+            for i, sig in enumerate(signals):
+                prob_up = (
+                    float(ensemble_probs[i])
+                    if ensemble_probs is not None and i < len(ensemble_probs)
+                    else (1.0 if int(sig) == 1 else 0.0)
+                )
+                regime = _detect_regime(i)
+                regime_gate = self.regime_entry_gates.get(regime, prob_gate_floor)
+                go_long = prob_up >= max(prob_gate_floor, regime_gate)
+                in_position = hold_remaining > 0
+                t_plus_one_blocks = bool(constraints.enable_t_plus_one and i in bought_today)
+
+                if in_position and t_plus_one_blocks:
+                    position[i] = 1.0
+                    hold_remaining = max(hold_remaining, 1)
+                elif in_position and hold_remaining == 1:
+                    prev_c = float(prev_closes[i])
+                    blocked = False
+                    if constraints.enable_limit_up_down and prev_c > 0 and closes[i] > 0:
+                        change = abs(closes[i] / prev_c - 1.0)
+                        if change >= constraints.limit_pct:
+                            blocked = True
+                    if blocked:
+                        position[i] = 1.0
+                        hold_remaining = 1
+                    else:
+                        position[i] = 0.0
+                        hold_remaining = 0
+                elif in_position:
+                    position[i] = 1.0
+                    hold_remaining -= 1
+                elif go_long:
+                    prev_c = float(prev_closes[i])
+                    blocked = False
+                    if constraints.enable_limit_up_down and prev_c > 0 and closes[i] > 0:
+                        change = abs(closes[i] / prev_c - 1.0)
+                        if change >= constraints.limit_pct:
+                            blocked = True
+                    if not blocked:
+                        position[i] = 1.0
+                        min_hold = 1 if constraints.enable_t_plus_one else 0
+                        hold_remaining = max(min_hold, int(horizon) - 1)
+                        trade_signals += 1
+                        bought_today.add(i)
+
+            entries = np.diff(position, prepend=0.0) > 0
+            exits = np.diff(position, prepend=0.0) < 0
+            daily_strategy = position * price_change - entries.astype(float) * buy_cost - exits.astype(float) * sell_cost
+            equity = np.cumprod(1.0 + daily_strategy)
+            buy_hold_equity = np.cumprod(1.0 + price_change)
+            note = "T+1+limit+full-cost"
+        # --- Simplified path (horizon hold, no extra exits) ---
+        else:
+            position = np.zeros(n, dtype=float)
+            hold_remaining = 0
+            trade_signals = 0
+            for i, sig in enumerate(signals):
+                prob_up = (
+                    float(ensemble_probs[i])
+                    if ensemble_probs is not None and i < len(ensemble_probs)
+                    else (1.0 if int(sig) == 1 else 0.0)
+                )
+                regime = _detect_regime(i)
+                regime_gate = self.regime_entry_gates.get(regime, prob_gate_floor)
+                go_long = prob_up >= max(prob_gate_floor, regime_gate)
+                if hold_remaining > 0:
+                    position[i] = 1.0
+                    hold_remaining -= 1
+                elif go_long:
+                    position[i] = 1.0
+                    hold_remaining = max(0, int(horizon) - 1)
+                    trade_signals += 1
+
+            entries = np.diff(position, prepend=0.0) > 0
+            exits = np.diff(position, prepend=0.0) < 0
+            daily_strategy = position * price_change - entries.astype(float) * buy_cost - exits.astype(float) * sell_cost
+            equity = np.cumprod(1.0 + daily_strategy)
+            buy_hold_equity = np.cumprod(1.0 + price_change)
+            note = "Simplified horizon hold + full-cost"
 
         active_mask = position > 0
         active_returns = daily_strategy[active_mask]
@@ -448,11 +925,11 @@ class ImprovedPredictor:
             "active_days": int(active_mask.sum()),
             "trade_signals": int(trade_signals),
             "min_confidence": float(min_confidence),
-            "prob_gate": float(prob_gate),
+            "prob_gate": float(prob_gate_floor),
             "transaction_cost": float(transaction_cost),
             "equity_curve": [float(x) for x in equity.tolist()],
             "buy_hold_curve": [float(x) for x in buy_hold_equity.tolist()],
-            "note": "Simplified long/cash simulation; excludes T+1, limit-up/down, and slippage.",
+            "note": note,
         }
 
     def train(
@@ -462,79 +939,371 @@ class ImprovedPredictor:
         up_threshold: float = 0.02,
         *,
         fast: bool = False,
+        label_method: str = "fixed_horizon",
+        stop_loss_pct: float | None = None,
+        progress_callback: object = None,
     ):
+        cb = progress_callback  # local alias
+
+        def _cb(event: dict) -> None:
+            if cb is not None and callable(cb):
+                try:
+                    cb(event)
+                except Exception:
+                    pass
+
+        self.label_method = label_method
+        self.stop_loss_pct = stop_loss_pct
+
+        _cb({"event": "phase", "phase": "prepare_features"})
         features_df = self.prepare_features(df)
-        labels = self.prepare_labels(features_df, horizon=horizon, up_threshold=up_threshold)
+        labels = self.prepare_labels(
+            features_df, horizon=horizon, up_threshold=up_threshold,
+            stop_loss_pct=stop_loss_pct, label_method=label_method,
+        )
         features_df, labels = align_features_and_labels(features_df, labels)
 
         X = features_df[self.feature_columns]
         y = labels
+        
+        # Split data for weight learning
+        if self.learn_weights:
+            val_split = 0.2
+            split_idx = int(len(X) * (1 - val_split))
+            X_train = X.iloc[:split_idx]
+            y_train = y.iloc[:split_idx]
+            X_val = X.iloc[split_idx:]
+            y_val = y.iloc[split_idx:]
+            features_train = features_df.iloc[:split_idx]
+            features_val = features_df.iloc[split_idx:]
+        else:
+            X_train = X
+            y_train = y
+            X_val = None
+            y_val = None
+            features_train = features_df
+            features_val = None
+        
         self.decision_threshold, self.probability_calibrator, _ = self._fit_validation_artifacts(
-            X, y, features_df
+            X_train, y_train, features_train
         )
-        self._train_vol_threshold = float(features_df["volatility_30"].quantile(0.75))
-        X_scaled = self.scaler.fit_transform(X)
+        self._train_vol_threshold = float(features_train["volatility_30"].quantile(0.75))
+        X_scaled = self.scaler.fit_transform(X_train)
 
         self.model_scores = {}
         self.trained_models = {}
-        time_cv = TimeSeriesSplit(n_splits=3 if fast else 5)
+        time_cv = TimeSeriesSplit(n_splits=5)
+
+        # Time-decay sample weights: recent data weighted more heavily (half-life ~252 days)
+        n_train = len(X_scaled)
+        decay_rate = np.log(2) / 252.0
+        time_weights = np.exp(-decay_rate * np.arange(n_train - 1, -1, -1))
+        time_weights = time_weights / time_weights.mean()  # normalize to mean=1
 
         for layer_name, model_name, model in self._iter_all_models():
-            model_instance = clone(model)
-            if fast:
-                model_instance.fit(X_scaled, y)
-                cv_mean = float(accuracy_score(y, model_instance.predict(X_scaled)))
-                cv_std = 0.0
-            else:
-                cv_scores = cross_val_score(model_instance, X_scaled, y, cv=time_cv, scoring="accuracy")
-                model_instance.fit(X_scaled, y)
-                cv_mean = float(cv_scores.mean())
-                cv_std = float(cv_scores.std())
             model_id = f"{layer_name}:{model_name}"
+            _cb({"event": "model_training", "model_id": model_id, "layer": layer_name})
+            cv_scores = cross_val_score(
+                clone(model), X_scaled, y_train, cv=time_cv, scoring="accuracy",
+            )
+            model_instance = clone(model)
+            model_instance.fit(X_scaled, y_train, sample_weight=time_weights)
+            cv_mean = float(cv_scores.mean())
+            cv_std = (
+                float(np.std(cv_scores, ddof=1))
+                if len(cv_scores) > 1
+                else 0.0
+            )
             self.trained_models[model_id] = model_instance
             self.model_scores[model_id] = {
                 "layer": layer_name,
                 "cv_mean": cv_mean,
                 "cv_std": cv_std,
             }
+            _cb({"event": "model_done", "model_id": model_id, "cv_mean": cv_mean, "cv_std": cv_std})
 
         self.global_regime_fallback = LogisticRegression(max_iter=2000, random_state=42)
-        self.global_regime_fallback.fit(X_scaled, y)
+        self.global_regime_fallback.fit(X_scaled, y_train, sample_weight=time_weights)
 
         regime_labels = self._derive_regime_labels(
-            features_df, vol_threshold=self._train_vol_threshold
+            features_train, vol_threshold=self._train_vol_threshold
         )
         self.trained_regime_models = {}
+        _cb({"event": "regime_start"})
         for regime in ["bull", "bear", "range", "high_vol"]:
             idx = regime_labels[regime_labels == regime].index
             if len(idx) < 80:
+                _cb({"event": "regime_progress", "regime": regime, "status": "skipped"})
                 continue
-            X_regime = X.loc[idx]
-            y_regime = y.loc[idx]
+            X_regime = X_train.loc[idx]
+            y_regime = y_train.loc[idx]
+            idx_in_train = [list(X_train.index).index(i) for i in idx if i in X_train.index]
+            regime_weights = time_weights[idx_in_train] if idx_in_train else None
             if y_regime.nunique() < 2:
+                _cb({"event": "regime_progress", "regime": regime, "status": "skipped"})
                 continue
             model = clone(self.regime_models[regime])
-            model.fit(self.scaler.transform(X_regime), y_regime)
+            model.fit(self.scaler.transform(X_regime), y_regime,
+                      sample_weight=regime_weights)
             self.trained_regime_models[regime] = model
+            _cb({"event": "regime_progress", "regime": regime, "status": "done"})
+        _cb({"event": "regime_done"})
+
+        # Filter weak models: exclude any model with CV accuracy < 50%
+        # This prevents bad models from diluting ensemble predictions
+        self.active_model_ids = set()
+        for model_id, score in self.model_scores.items():
+            if score["cv_mean"] >= 0.50:
+                self.active_model_ids.add(model_id)
+        # Always keep at least the best model
+        if not self.active_model_ids and self.model_scores:
+            best_id = max(self.model_scores, key=lambda k: self.model_scores[k]["cv_mean"])
+            self.active_model_ids.add(best_id)
+
+        # Train LSTM if enabled
+        if self.lstm_enabled and self.lstm_model is not None:
+            _cb({"event": "lstm_start"})
+            try:
+                X_train_scaled = self.scaler.transform(X_train)
+                lstm_split = int(len(X_train_scaled) * 0.8)
+                X_train_lstm = X_train_scaled[:lstm_split]
+                y_train_lstm = y_train.iloc[:lstm_split].values
+                X_val_lstm = X_train_scaled[lstm_split:]
+                y_val_lstm = y_train.iloc[lstm_split:].values
+                self.lstm_model.fit(X_train_lstm, y_train_lstm, X_val_lstm, y_val_lstm)
+                _cb({"event": "lstm_done"})
+            except Exception as exc:
+                _cb({"event": "lstm_error", "error": str(exc)})
+        else:
+            _cb({"event": "lstm_skipped", "reason": "TensorFlow not available or LSTM disabled"})
+
+        # Learn optimal weights if enabled
+        if self.learn_weights and X_val is not None and self.weight_optimizer_available:
+            _cb({"event": "weights_start"})
+            self._learn_optimal_weights(X_val, y_val, features_val)
+            _cb({"event": "weights_done"})
+        else:
+            _cb({"event": "weights_skipped"})
+
+        # Compute feature importance from tree models
+        self._compute_feature_importance()
+
+        # Select useful features per stock (drop noise)
+        if X_val is not None and y_val is not None and len(X_val) >= 50:
+            self._select_features(X_val[self.feature_columns], y_val, min_features=20)
+        else:
+            self._select_features(X_train[self.feature_columns], y_train, min_features=20)
+        dropped = [c for c in self.feature_columns if c not in self.active_feature_columns]
+        if dropped:
+            self.feature_columns = self.active_feature_columns
+
+        # Tune per-regime decision thresholds
+        if X_val is not None and y_val is not None:
+            self._tune_regime_thresholds(X_val, y_val, features_val)
 
         self.up_threshold = up_threshold
         self.is_trained = True
+        _cb({"event": "training_complete"})
+
+    def _compute_feature_importance(self) -> None:
+        """Average feature importance from all tree-based trained models."""
+        scores: Dict[str, List[float]] = {}
+        for model_id, model in self.trained_models.items():
+            if hasattr(model, 'feature_importances_'):
+                for col, imp in zip(self.feature_columns, model.feature_importances_):
+                    scores.setdefault(col, []).append(float(imp))
+        self.feature_importance_scores = {
+            col: float(np.mean(vals)) for col, vals in scores.items() if vals
+        }
+        self.active_feature_columns = list(self.feature_columns)
+
+    def _select_features(self, X_val: pd.DataFrame, y_val: pd.Series, min_features: int = 20) -> None:
+        """Drop features with negative or near-zero importance on validation data."""
+        if len(X_val) < 50 or y_val.nunique() < 2:
+            return
+        from sklearn.ensemble import RandomForestClassifier
+        from sklearn.metrics import accuracy_score
+
+        rf = RandomForestClassifier(n_estimators=80, max_depth=8, random_state=42, n_jobs=-1)
+        rf.fit(X_val, y_val)
+        baseline_acc = accuracy_score(y_val, rf.predict(X_val))
+
+        importances: Dict[str, float] = {}
+        for col in self.feature_columns:
+            if col not in X_val.columns:
+                continue
+            X_perm = X_val.copy()
+            X_perm[col] = np.random.permutation(X_perm[col].values)
+            perm_acc = accuracy_score(y_val, rf.predict(X_perm))
+            importances[col] = float(baseline_acc - perm_acc)
+
+        # Keep features with positive importance
+        kept = [col for col, imp in importances.items() if imp > 0.0]
+        if len(kept) < min_features:
+            # Fall back to top-N by importance
+            kept = sorted(importances, key=lambda c: importances[c], reverse=True)[:min_features]
+
+        self.active_feature_columns = kept
+
+    def _tune_regime_thresholds(
+        self, X_val: pd.DataFrame, y_val: pd.Series, features_val: pd.DataFrame
+    ) -> None:
+        """Tune per-regime decision thresholds to improve precision per market state."""
+        if y_val.nunique() < 2 or len(X_val) < 40:
+            self.regime_decision_thresholds = {}
+            return
+        from sklearn.metrics import f1_score
+        X_val_scaled = self.scaler.transform(X_val)
+        regime_labels = self._derive_regime_labels(features_val, vol_threshold=self._train_vol_threshold)
+
+        for regime in ['bull', 'bear', 'range', 'high_vol']:
+            idx = regime_labels[regime_labels == regime].index
+            if len(idx) < 20:
+                continue
+            model = self.trained_regime_models.get(regime)
+            if model is None:
+                continue
+            X_r = X_val.loc[idx]
+            y_r = y_val.loc[idx]
+            if y_r.nunique() < 2:
+                continue
+            probs = model.predict_proba(self.scaler.transform(X_r))[:, 1]
+            best_t = 0.5
+            best_f1 = -1.0
+            for t in np.linspace(0.3, 0.7, 21):
+                preds = (probs > t).astype(int)
+                f1 = float(f1_score(y_r, preds, pos_label=1, zero_division=0))
+                if f1 > best_f1:
+                    best_f1 = f1
+                    best_t = float(t)
+            self.regime_decision_thresholds[regime] = best_t
+
+    def _learn_optimal_weights(self, X_val: pd.DataFrame, y_val: pd.Series, features_val: pd.DataFrame):
+        """
+        Learn optimal ensemble weights from validation data using hierarchical optimization
+        
+        This addresses the criticism: "Hard-coded weights - where do these percentages come from?"
+        Now weights are LEARNED from data, not hard-coded.
+        """
+        # Get predictions from all models on validation data
+        X_val_scaled = self.scaler.transform(X_val)
+        
+        layer_predictions = {}
+        
+        # Collect baseline layer predictions
+        layer_predictions['baseline'] = {}
+        for model_id, model in self.trained_models.items():
+            if model_id.startswith('baseline:'):
+                model_name = model_id.split(':')[1]
+                proba = model.predict_proba(X_val_scaled)[:, 1]
+                layer_predictions['baseline'][model_name] = proba
+        
+        # Collect enhanced layer predictions
+        layer_predictions['enhanced'] = {}
+        for model_id, model in self.trained_models.items():
+            if model_id.startswith('enhanced:'):
+                model_name = model_id.split(':')[1]
+                proba = model.predict_proba(X_val_scaled)[:, 1]
+                layer_predictions['enhanced'][model_name] = proba
+        
+        # Collect regime layer predictions
+        regime_labels_val = self._derive_regime_labels(features_val, vol_threshold=self._train_vol_threshold)
+        regime_probs = []
+        for i in range(len(X_val)):
+            regime = regime_labels_val.iloc[i]
+            model = self.trained_regime_models.get(regime, self.global_regime_fallback)
+            prob = model.predict_proba(X_val_scaled[i:i+1])[0, 1]
+            regime_probs.append(prob)
+        layer_predictions['regime'] = {'regime': np.array(regime_probs)}
+        
+        # Add LSTM predictions if available
+        if self.lstm_enabled and self.lstm_model is not None:
+            lstm_proba = self.lstm_model.predict_proba(X_val_scaled)
+            seq_len = self.lstm_model.sequence_length
+            
+            # Align all predictions to LSTM length
+            aligned_layer_predictions = {}
+            for layer_name, models in layer_predictions.items():
+                aligned_layer_predictions[layer_name] = {
+                    model_name: preds[seq_len:] 
+                    for model_name, preds in models.items()
+                }
+            
+            aligned_layer_predictions['lstm'] = {'lstm': lstm_proba}
+            layer_predictions = aligned_layer_predictions
+            y_val_aligned = y_val.iloc[seq_len:].values
+        else:
+            y_val_aligned = y_val.values
+        
+        # Hierarchical weight optimization (F1-based)
+        result = self._hierarchical_weight_optimization(
+            layer_predictions,
+            y_val_aligned,
+            method='stacking',
+            verbose=False
+        )
+
+        self.within_layer_weights = result['within_layer_weights']
+        self.learned_layer_weights = result['layer_weights']
+
+        # Secondary Sharpe-based fine-tuning on layer weights
+        if hasattr(features_val, 'columns') and 'price_change' in features_val.columns:
+            try:
+                layer_predictions_sharpe = {}
+                for layer_name in ['baseline', 'enhanced', 'regime']:
+                    if layer_name in layer_predictions and layer_name in self.within_layer_weights:
+                        within_w = self.within_layer_weights[layer_name]
+                        layer_pred = sum(
+                            within_w[name] * preds
+                            for name, preds in layer_predictions[layer_name].items()
+                        )
+                        layer_predictions_sharpe[layer_name] = layer_pred
+
+                if layer_predictions_sharpe:
+                    from .weight_optimizer import EnsembleWeightOptimizer
+                    sharpe_opt = EnsembleWeightOptimizer(method='stacking')
+                    sharpe_result = sharpe_opt.fit_sharpe(
+                        layer_predictions_sharpe,
+                        y_val_aligned,
+                        features_val['price_change'].iloc[:len(y_val_aligned)].fillna(0).values,
+                        horizon=self.horizon if hasattr(self, 'horizon') else 5,
+                        verbose=False,
+                    )
+                    # Blend: 60% F1-based, 40% Sharpe-based layer weights
+                    for layer in self.learned_layer_weights:
+                        if layer in sharpe_result:
+                            self.learned_layer_weights[layer] = (
+                                0.6 * self.learned_layer_weights[layer] + 0.4 * sharpe_result[layer]
+                            )
+            except Exception:
+                pass  # Sharpe fine-tuning is optional; F1 weights are already good
+
+        # Update layer_weights for compatibility
+        self.layer_weights = self.learned_layer_weights
 
     def _predict_layer_probs(self, latest_scaled: np.ndarray) -> Dict[str, float]:
         probs = {"baseline": [], "enhanced": []}
+        weights = {"baseline": [], "enhanced": []}
         model_probs = {}
 
         for model_id, model in self.trained_models.items():
+            if self.active_model_ids and model_id not in self.active_model_ids:
+                continue  # skip weak models (CV < 50%)
             layer = model_id.split(":", 1)[0]
             prob = model.predict_proba(latest_scaled)[0]
             up_prob = float(prob[1])
-            probs[layer].append(up_prob)
+            # Weight by CV score so good models dominate the ensemble
+            cv_w = max(0.0, self.model_scores.get(model_id, {}).get("cv_mean", 0.5) - 0.45)
+            probs[layer].append(up_prob * cv_w)
+            weights[layer].append(cv_w)
             model_probs[model_id] = {"down": float(prob[0]), "up": up_prob}
 
-        layer_up = {
-            "baseline": float(np.mean(probs["baseline"])) if probs["baseline"] else 0.5,
-            "enhanced": float(np.mean(probs["enhanced"])) if probs["enhanced"] else 0.5,
-        }
+        layer_up = {}
+        for layer in ["baseline", "enhanced"]:
+            if weights[layer] and sum(weights[layer]) > 0:
+                layer_up[layer] = float(sum(probs[layer]) / sum(weights[layer]))
+            else:
+                layer_up[layer] = 0.5
         return {"layer_up": layer_up, "model_probs": model_probs}
 
     def predict(self, df: pd.DataFrame, horizon: int = 5) -> Dict:
@@ -560,27 +1329,89 @@ class ImprovedPredictor:
         probabilities[f"regime:{regime}"] = {"down": float(regime_prob[0]), "up": regime_up}
         individual_predictions[f"regime:{regime}"] = int(regime_up > 0.5)
 
-        ensemble_up_raw = _clip01(
-            self.layer_weights["baseline"] * layer_up["baseline"]
-            + self.layer_weights["enhanced"] * layer_up["enhanced"]
-            + self.layer_weights["regime"] * regime_up
-        )
+        # Add LSTM prediction if available
+        lstm_up = None
+        if self.lstm_enabled and self.lstm_model is not None:
+            # Get more features for sequence
+            sequence_features = features_df[self.feature_columns].iloc[-self.lstm_model.sequence_length:]
+            if len(sequence_features) >= self.lstm_model.sequence_length:
+                sequence_scaled = self.scaler.transform(sequence_features.values)
+                lstm_proba = self.lstm_model.predict_proba(sequence_scaled)
+                lstm_up = float(lstm_proba[-1])  # Last prediction
+                probabilities["lstm:lstm"] = {"down": 1.0 - lstm_up, "up": lstm_up}
+                individual_predictions["lstm:lstm"] = int(lstm_up > 0.5)
+
+        # Calculate ensemble prediction using learned weights if available
+        if self.learned_layer_weights:
+            # Use learned weights
+            weights = self.learned_layer_weights
+            ensemble_up_raw = (
+                weights.get("baseline", 0.35) * layer_up["baseline"] +
+                weights.get("enhanced", 0.40) * layer_up["enhanced"] +
+                weights.get("regime", 0.25) * regime_up
+            )
+            if lstm_up is not None and "lstm" in weights:
+                # Adjust weights if LSTM is included — normalize to prevent unbounded ensemble
+                total_trad = weights.get("baseline", 0) + weights.get("enhanced", 0) + weights.get("regime", 0)
+                lstm_weight = weights.get("lstm", 0)
+                total_weight = total_trad + lstm_weight
+                if total_weight > 0:
+                    ensemble_up_raw = (
+                        weights.get("baseline", 0) * layer_up["baseline"] +
+                        weights.get("enhanced", 0) * layer_up["enhanced"] +
+                        weights.get("regime", 0) * regime_up +
+                        lstm_weight * lstm_up
+                    ) / total_weight
+        else:
+            # Use fixed weights
+            ensemble_up_raw = _clip01(
+                self.layer_weights["baseline"] * layer_up["baseline"]
+                + self.layer_weights["enhanced"] * layer_up["enhanced"]
+                + self.layer_weights["regime"] * regime_up
+            )
+            if lstm_up is not None:
+                # Include LSTM with fixed weight (25%)
+                ensemble_up_raw = 0.25 * layer_up["baseline"] + 0.30 * layer_up["enhanced"] + 0.20 * regime_up + 0.25 * lstm_up
+        
+        ensemble_up_raw = _clip01(ensemble_up_raw)
         ensemble_up = float(
             self._calibrate_probs(
                 self.probability_calibrator, np.array([ensemble_up_raw])
             )[0]
         )
         ensemble_up = _clip01(ensemble_up)
-        decision_threshold = float(getattr(self, "decision_threshold", 0.5) or 0.5)
-        ensemble_prediction = 1 if ensemble_up > decision_threshold else 0
-
+        # Use regime-specific threshold when available, fall back to global threshold
+        if self.regime_decision_thresholds and regime in self.regime_decision_thresholds:
+            decision_threshold = self.regime_decision_thresholds[regime]
+        else:
+            decision_threshold = float(getattr(self, "decision_threshold", 0.5) or 0.5)
         model_up_values = [x["up"] for x in probabilities.values()]
         agreement = _clip01(1 - (np.std(model_up_values) * 2))
         direction_strength = abs(ensemble_up - 0.5) * 2
         confidence = _clip01(0.6 * direction_strength + 0.4 * agreement)
 
+        # Separate model direction from an executable research signal. The
+        # previous threshold-only rule could call a 38% probability "up" even
+        # when every constituent model was bearish. A signal is tradeable only
+        # when probability, confidence and model agreement all clear floors.
+        raw_direction = 1 if ensemble_up > decision_threshold else 0
+        bullish_votes = sum(1 for value in model_up_values if value >= 0.5)
+        vote_ratio = bullish_votes / max(len(model_up_values), 1)
+        trade_reasons = []
+        if ensemble_up < 0.60:
+            trade_reasons.append("probability_below_60pct")
+        if confidence < 0.60:
+            trade_reasons.append("confidence_below_60pct")
+        if raw_direction == 1 and vote_ratio < 0.50:
+            trade_reasons.append("model_consensus_below_50pct")
+        trade_allowed = not trade_reasons and raw_direction == 1
+        ensemble_prediction = 1 if trade_allowed else 0
+
         return {
             "prediction": ensemble_prediction,
+            "raw_prediction": raw_direction,
+            "trade_allowed": trade_allowed,
+            "trade_reasons": trade_reasons,
             "confidence": confidence,
             "individual_predictions": individual_predictions,
             "probabilities": probabilities,
@@ -592,9 +1423,14 @@ class ImprovedPredictor:
                 "baseline_up": round(layer_up["baseline"], 4),
                 "enhanced_up": round(layer_up["enhanced"], 4),
                 "regime_up": round(regime_up, 4),
+                "lstm_up": round(lstm_up, 4) if lstm_up is not None else None,
                 "regime": regime,
                 "ensemble_up": round(ensemble_up, 4),
                 "ensemble_up_raw": round(float(ensemble_up_raw), 4),
+                "bullish_vote_ratio": round(vote_ratio, 4),
+                "trade_allowed": trade_allowed,
+                "weights_learned": bool(self.learned_layer_weights),
+                "lstm_enabled": self.lstm_enabled,
             },
             "calibration_applied": self.probability_calibrator is not None,
         }
@@ -612,11 +1448,12 @@ class ImprovedPredictor:
         if train_end < 80 or len(X) - test_start < 10:
             raise ValueError("Insufficient samples after purged split for backtest")
 
-        X_train = X.iloc[:train_end]
+        train_start = 0  # use all available training data
+        X_train = X.iloc[train_start:train_end]
         X_test = X.iloc[test_start:]
-        y_train = y.iloc[:train_end]
+        y_train = y.iloc[train_start:train_end]
         y_test = y.iloc[test_start:]
-        feature_train = features_df.iloc[:train_end]
+        feature_train = features_df.iloc[train_start:train_end]
         feature_test = features_df.iloc[test_start:]
         train_vol_threshold = float(feature_train["volatility_30"].quantile(0.75))
 
@@ -684,6 +1521,7 @@ class ImprovedPredictor:
             ensemble_probs=ensemble_up,
             decision_threshold=decision_threshold,
             min_confidence=float(min_confidence or 0.0),
+            constraints=TradingConstraints() if TradingConstraints is not None else None,
         )
         calibration_test = {
             "enabled": calibrator is not None,
@@ -751,55 +1589,9 @@ class ImprovedPredictor:
             y_eval = y
             features_eval = features_df
 
-        with_sent = self._backtest_ml_core(
+        return self._backtest_ml_core(
             X_eval, y_eval, features_eval, test_size, horizon=horizon, min_confidence=min_confidence
         )
-
-        no_sent_cols = [c for c in X_eval.columns if c not in SENTIMENT_COLUMNS]
-        sentiment_cols = [c for c in X_eval.columns if c in SENTIMENT_COLUMNS]
-        if len(no_sent_cols) == len(X_eval.columns) or len(sentiment_cols) == 0:
-            with_sent["sentiment_comparison"] = {
-                "enabled": False,
-                "reason": "sentiment_features_not_available",
-            }
-            return with_sent
-
-        without_sent = self._backtest_ml_core(
-            X_eval[no_sent_cols],
-            y_eval,
-            features_eval,
-            test_size,
-            horizon=horizon,
-            min_confidence=min_confidence,
-        )
-        with_acc = float(with_sent["results"]["ensemble"]["accuracy"])
-        with_f1 = float(with_sent["results"]["ensemble"]["f1"])
-        no_acc = float(without_sent["results"]["ensemble"]["accuracy"])
-        no_f1 = float(without_sent["results"]["ensemble"]["f1"])
-        with_sent["sentiment_comparison"] = {
-            "enabled": True,
-            "with_sentiment": {
-                "accuracy": with_acc,
-                "f1": with_f1,
-                "improvement": float(with_sent["improvement"]),
-            },
-            "without_sentiment": {
-                "accuracy": no_acc,
-                "f1": no_f1,
-                "improvement": float(without_sent["improvement"]),
-            },
-            "delta": {
-                "accuracy": float(with_acc - no_acc),
-                "f1": float(with_f1 - no_f1),
-                "improvement": float(with_sent["improvement"] - without_sent["improvement"]),
-            },
-            "feature_count": {
-                "with_sentiment": int(len(X_eval.columns)),
-                "without_sentiment": int(len(no_sent_cols)),
-                "sentiment_only": int(len(sentiment_cols)),
-            },
-        }
-        return with_sent
 
     def _walk_forward_eval(
         self,
@@ -850,6 +1642,123 @@ class ImprovedPredictor:
             "samples": len(truths),
             "accuracy": float(accuracy_score(truths, preds)),
             "method": "ensemble_walk_forward",
+        }
+
+    def backtest_multi_fold(
+        self,
+        df: pd.DataFrame,
+        horizon: int = 5,
+        test_size_per_fold: float = 0.15,
+        n_folds: int = 3,
+        up_threshold: float = 0.02,
+        label_method: str = "triple_barrier",
+    ) -> Dict[str, Any]:
+        """Purged expanding-window multi-fold backtest.
+
+        Splits the test period into N contiguous windows. For each window,
+        trains on all data before it and tests on the window. Reports mean
+        and std of PnL metrics across folds for honest evaluation.
+        """
+        features_df = self.prepare_features(df)
+        labels = self.prepare_labels(
+            features_df, horizon=horizon, up_threshold=up_threshold,
+            label_method=label_method,
+        )
+        features_df, labels = align_features_and_labels(features_df, labels)
+        X = features_df[self.feature_columns]
+        y = labels
+
+        total_n = len(X)
+        fold_size = int(total_n * test_size_per_fold)
+        if total_n < 200 or fold_size < 50:
+            raise ValueError(f"Data too small for multi-fold: {total_n} rows")
+
+        # Compute fold boundaries: last fold ends at the latest data
+        fold_metrics = []
+        for fold in range(n_folds):
+            test_end = total_n - (n_folds - 1 - fold) * fold_size
+            test_start = test_end - fold_size
+            embargo = int(horizon)
+            train_end = max(0, test_start - embargo)
+            train_start = 0  # use all history before the test window
+
+            if train_end < 80 or test_end - test_start < 30:
+                continue
+
+            X_train = X.iloc[train_start:train_end]
+            y_train = y.iloc[train_start:train_end]
+            feature_train = features_df.iloc[train_start:train_end]
+            X_test = X.iloc[test_start:test_end]
+            y_test = y.iloc[test_start:test_end]
+            feature_test = features_df.iloc[test_start:test_end]
+
+            if y_train.nunique() < 2 or y_test.nunique() < 2:
+                continue
+
+            bundle = self._fit_ensemble_bundle(X_train, y_train, feature_train)
+            scaler = bundle["scaler"]
+            X_test_scaled = scaler.transform(X_test)
+
+            decision_threshold, calibrator, _ = self._fit_validation_artifacts(
+                X_train, y_train, feature_train
+            )
+
+            ensemble_up_raw = self._predict_ensemble_up(bundle, X_test, feature_test)
+            ensemble_up = self._calibrate_probs(calibrator, ensemble_up_raw)
+            ensemble_preds = (ensemble_up > decision_threshold).astype(int).tolist()
+
+            pnl = self._simulate_pnl_backtest(
+                feature_test, ensemble_preds, horizon,
+                ensemble_probs=ensemble_up,
+                decision_threshold=decision_threshold,
+                min_confidence=0.0,
+                constraints=TradingConstraints() if TradingConstraints is not None else None,
+            )
+
+            fold_metrics.append({
+                "fold": fold,
+                "test_days": test_end - test_start,
+                "train_days": train_end - train_start,
+                "accuracy": float(accuracy_score(y_test, ensemble_preds)),
+                "sharpe": pnl["sharpe_ratio"],
+                "total_return": pnl["total_return"],
+                "excess_return": pnl["excess_return"],
+                "buy_hold_return": pnl["buy_hold_return"],
+                "max_drawdown": pnl["max_drawdown"],
+                "win_rate": pnl["win_rate"],
+                "trade_signals": pnl["trade_signals"],
+            })
+
+        if not fold_metrics:
+            raise ValueError("No valid folds produced")
+
+        # Aggregate
+        sharpes = [m["sharpe"] for m in fold_metrics]
+        returns = [m["total_return"] for m in fold_metrics]
+        excesses = [m["excess_return"] for m in fold_metrics]
+        maxdds = [m["max_drawdown"] for m in fold_metrics]
+        wins = [m["win_rate"] for m in fold_metrics]
+        sigs = [m["trade_signals"] for m in fold_metrics]
+        accs = [m["accuracy"] for m in fold_metrics]
+
+        return {
+            "n_folds": len(fold_metrics),
+            "method": "purged_expanding_window",
+            "label_method": label_method,
+            "horizon": horizon,
+            "accuracy_mean": float(np.mean(accs)),
+            "accuracy_std": float(np.std(accs, ddof=1)) if len(accs) > 1 else 0.0,
+            "sharpe_mean": float(np.mean(sharpes)),
+            "sharpe_std": float(np.std(sharpes, ddof=1)) if len(sharpes) > 1 else 0.0,
+            "total_return_mean": float(np.mean(returns)),
+            "total_return_std": float(np.std(returns, ddof=1)) if len(returns) > 1 else 0.0,
+            "excess_return_mean": float(np.mean(excesses)),
+            "max_drawdown_mean": float(np.mean(maxdds)),
+            "max_drawdown_worst": float(np.min(maxdds)),
+            "win_rate_mean": float(np.mean(wins)),
+            "trade_signals_mean": float(np.mean(sigs)),
+            "trade_signals_total": int(sum(sigs)),
+            "folds": fold_metrics,
         }
 
     def _backtest_rule_ma_cross(
@@ -906,9 +1815,14 @@ class ImprovedPredictor:
         strategy: str = "ensemble_ml",
         up_threshold: float = 0.02,
         min_confidence: float = 0.0,
+        label_method: str = "fixed_horizon",
+        stop_loss_pct: float | None = None,
     ) -> Dict:
         features_df = self.prepare_features(df)
-        labels = self.prepare_labels(features_df, horizon=horizon, up_threshold=up_threshold)
+        labels = self.prepare_labels(
+            features_df, horizon=horizon, up_threshold=up_threshold,
+            stop_loss_pct=stop_loss_pct, label_method=label_method,
+        )
         features_df, labels = align_features_and_labels(features_df, labels)
 
         X = features_df[self.feature_columns]
@@ -932,6 +1846,8 @@ class ImprovedPredictor:
                 "horizon": horizon,
                 "strategy": strategy,
                 "up_threshold": up_threshold,
+                "label_method": label_method,
+                "stop_loss_pct": stop_loss_pct,
             }
         )
         return result

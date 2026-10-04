@@ -5,20 +5,24 @@ from typing import Optional
 
 from fastapi import APIRouter, Body, Query
 
-from api.common import error_response, run_blocking, success_response
+from api.common import ServiceError, error_response, run_blocking, success_response
 from api.schemas import BacktestRequest, PredictRequest
 from api.services import prediction_service
 
 router = APIRouter(tags=["predictions"])
 
 
-async def _run_predict(symbol: str, horizon: int, up_threshold: float):
+async def _run_predict(symbol: str, horizon: int, up_threshold: float, task_id: str = ""):
+    kwargs = {}
+    if task_id:
+        kwargs["task_id"] = task_id
     return await run_blocking(
         prediction_service.predict_stock,
         symbol,
         horizon,
         up_threshold,
         timeout=180.0,
+        **kwargs,
     )
 
 
@@ -29,7 +33,11 @@ async def _run_backtest(
     test_size: float,
     up_threshold: float,
     min_confidence: float = 0.0,
+    task_id: str = "",
 ):
+    kwargs = {}
+    if task_id:
+        kwargs["task_id"] = task_id
     return await run_blocking(
         prediction_service.backtest_strategy,
         symbol,
@@ -43,12 +51,17 @@ async def _run_backtest(
 
 
 @router.post("/api/predictions/predict")
-async def predict_stock_post(request: PredictRequest):
+async def predict_stock_post(
+    request: PredictRequest,
+    task_id: str = Query(default="", max_length=32),
+):
     try:
-        prediction = await _run_predict(request.symbol, request.horizon, request.up_threshold)
+        prediction = await _run_predict(request.symbol, request.horizon, request.up_threshold, task_id=task_id)
         return success_response(prediction)
     except asyncio.TimeoutError:
         return error_response("prediction timeout")
+    except ServiceError:
+        raise
     except Exception as exc:
         return error_response(str(exc))
 
@@ -58,12 +71,15 @@ async def predict_stock_get(
     symbol: str = Query(..., min_length=1, max_length=32),
     horizon: int = Query(default=5, ge=1, le=60),
     up_threshold: float = Query(default=0.02, ge=0.0, le=1.0),
+    task_id: str = Query(default="", max_length=32),
 ):
     try:
-        prediction = await _run_predict(symbol, horizon, up_threshold)
+        prediction = await _run_predict(symbol, horizon, up_threshold, task_id=task_id)
         return success_response(prediction)
     except asyncio.TimeoutError:
         return error_response("prediction timeout")
+    except ServiceError:
+        raise
     except Exception as exc:
         return error_response(str(exc))
 
@@ -76,6 +92,7 @@ async def backtest_strategy_post(
     horizon: int = Query(default=5, ge=1, le=60),
     test_size: float = Query(default=0.2, gt=0.0, lt=1.0),
     up_threshold: float = Query(default=0.02, ge=0.0, le=1.0),
+    task_id: str = Query(default="", max_length=32),
 ):
     try:
         if request:
@@ -86,14 +103,17 @@ async def backtest_strategy_post(
                 request.test_size,
                 request.up_threshold,
                 request.min_confidence,
+                task_id=task_id,
             )
         elif symbol:
-            result = await _run_backtest(symbol, strategy, horizon, test_size, up_threshold, 0.0)
+            result = await _run_backtest(symbol, strategy, horizon, test_size, up_threshold, 0.0, task_id=task_id)
         else:
             return error_response("symbol is required")
         return success_response(result)
     except asyncio.TimeoutError:
         return error_response("backtest timeout")
+    except ServiceError:
+        raise
     except Exception as exc:
         return error_response(str(exc))
 
@@ -105,13 +125,16 @@ async def backtest_strategy_query(
     horizon: int = Query(default=5, ge=1, le=60),
     test_size: float = Query(default=0.2, gt=0.0, lt=1.0),
     up_threshold: float = Query(default=0.02, ge=0.0, le=1.0),
+    task_id: str = Query(default="", max_length=32),
 ):
     """Legacy query-string backtest endpoint kept for compatibility."""
     try:
-        result = await _run_backtest(symbol, strategy, horizon, test_size, up_threshold, 0.0)
+        result = await _run_backtest(symbol, strategy, horizon, test_size, up_threshold, 0.0, task_id=task_id)
         return success_response(result)
     except asyncio.TimeoutError:
         return error_response("backtest timeout")
+    except ServiceError:
+        raise
     except Exception as exc:
         return error_response(str(exc))
 
@@ -129,6 +152,8 @@ async def get_prediction_history(
             timeout=20.0,
         )
         return success_response({"items": rows, "count": len(rows), "symbol": symbol or "", "limit": limit})
+    except ServiceError:
+        raise
     except Exception as exc:
         return error_response(str(exc), {"items": [], "count": 0, "symbol": symbol or "", "limit": limit})
 
@@ -140,6 +165,8 @@ async def get_prediction_run(run_id: str):
         if not payload:
             return error_response("Prediction run not found", {"item": None})
         return success_response({"item": payload})
+    except ServiceError:
+        raise
     except Exception as exc:
         return error_response(str(exc), {"item": None})
 
@@ -157,6 +184,8 @@ async def get_backtest_history(
             timeout=20.0,
         )
         return success_response({"items": rows, "count": len(rows), "symbol": symbol or "", "limit": limit})
+    except ServiceError:
+        raise
     except Exception as exc:
         return error_response(str(exc), {"items": [], "count": 0, "symbol": symbol or "", "limit": limit})
 
@@ -168,5 +197,7 @@ async def get_backtest_run(run_id: str):
         if not payload:
             return error_response("Backtest run not found", {"item": None})
         return success_response({"item": payload})
+    except ServiceError:
+        raise
     except Exception as exc:
         return error_response(str(exc), {"item": None})

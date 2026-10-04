@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 
 from api.common import ServiceError, error_response, normalize_validation_errors
 from api.constants import ALLOWED_ORIGINS, APP_VERSION
-from api.routes import admin, ai, auth, core, predictions, sentiment, stocks, system
+from api.routes import admin, ai, auth, core, investment, predictions, stocks, system, tasks
 
 
 def create_app() -> FastAPI:
@@ -43,7 +43,20 @@ def create_app() -> FastAPI:
             ),
         )
 
-    for module in (core, stocks, sentiment, ai, auth, admin, system, predictions):
+    for module in (core, stocks, ai, auth, admin, system, predictions, investment, tasks):
         application.include_router(module.router)
+
+    @application.on_event("startup")
+    async def _start_background_jobs() -> None:
+        try:
+            from pathlib import Path
+
+            sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+            from jobs.investment_jobs import start_investment_scheduler
+
+            start_investment_scheduler()
+        except Exception:
+            # Scheduler is optional (requires APScheduler); never block startup.
+            pass
 
     return application

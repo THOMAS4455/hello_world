@@ -12,7 +12,6 @@ from api.services import (
     ai_service,
     auth_service,
     data_service,
-    market_sentiment_service,
     prediction_service,
     system_settings_service,
 )
@@ -24,7 +23,6 @@ __all__ = [
     "ai_service",
     "auth_service",
     "data_service",
-    "market_sentiment_service",
     "prediction_service",
     "system_settings_service",
 ]
@@ -40,7 +38,6 @@ if __name__ == "__main__":
     print("Data service initialized")
     print("Prediction service initialized")
     print("Auth service initialized")
-    print("Market sentiment service initialized")
     print("System settings service initialized")
     print("Starting stock prediction backend")
     print("URL: http://127.0.0.1:8000")

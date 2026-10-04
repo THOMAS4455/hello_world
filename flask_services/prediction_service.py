@@ -13,7 +13,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-import requests
 
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root / "src"))
@@ -23,53 +22,24 @@ class PredictionService:
     def __init__(self) -> None:
         self.cache: Dict[str, Dict[str, Any]] = {}
         self.cache_timeout = 3600
-        self._trained_models: Dict[Tuple[str, int, float], float] = {}
+        self._trained_models: Dict[Tuple[str, int, float, str], float] = {}
         self._history_cache: Dict[str, Dict[str, Any]] = {}
-        self._sentiment_cache: Dict[str, Dict[str, Any]] = {}
-        self.sentiment_cache_timeout = 1800
         self.predict_timeout_seconds = 180
-        self._market_sentiment_cache_key = "__market__"
         self._model_lock = threading.Lock()
         self._storage_lock = threading.RLock()
         data_dir = Path(__file__).parent.parent / "data"
         data_dir.mkdir(parents=True, exist_ok=True)
         self._history_file = data_dir / "prediction_runs.json"
-        self.positive_words = {
-            "上涨",
-            "反弹",
-            "走强",
-            "利好",
-            "回暖",
-            "新高",
-            "突破",
-            "增持",
-            "增长",
-            "修复",
-            "改善",
-        }
-        self.negative_words = {
-            "下跌",
-            "走弱",
-            "利空",
-            "回落",
-            "新低",
-            "跌破",
-            "减持",
-            "风险",
-            "承压",
-            "担忧",
-            "波动",
-        }
         self._init_prediction_service()
 
     def _init_prediction_service(self) -> None:
         from core.akshare_data_collector import AKShareDataCollector
         from core.improved_predictor import ImprovedPredictor
 
-        self.predictor = ImprovedPredictor()
+        self.predictor = ImprovedPredictor(learn_weights=True)
         self.collector = AKShareDataCollector()
         self.has_real_predictor = True
-        print("Prediction service initialized")
+        print("Prediction service initialized with ImprovedPredictor (weight learning + LSTM enabled)")
 
     def _default_history_payload(self) -> Dict[str, Any]:
         return {"predictions": [], "backtests": []}
@@ -287,25 +257,22 @@ class PredictionService:
             pass
 
         if not records:
-            for adjust in ("", "qfq"):
-                try:
-                    hist_df = ak.stock_zh_a_hist(
-                        symbol=code,
-                        period="daily",
-                        start_date=start_date,
-                        end_date=end_date,
-                        adjust=adjust,
-                    )
-                    records = self._history_df_to_records(code, hist_df)
-                    if records:
-                        break
-                except Exception:
-                    continue
+            try:
+                hist_df = ak.stock_zh_a_hist(
+                    symbol=code,
+                    period="daily",
+                    start_date=start_date,
+                    end_date=end_date,
+                    adjust="qfq",
+                )
+                records = self._history_df_to_records(code, hist_df)
+            except Exception:
+                records = []
 
         if not records:
             try:
                 market_symbol = self._to_market_symbol(code)
-                daily_df = ak.stock_zh_a_daily(symbol=market_symbol, adjust="")
+                daily_df = ak.stock_zh_a_daily(symbol=market_symbol, adjust="qfq")
                 records = self._history_df_to_records(code, daily_df.tail(1200))
             except Exception:
                 records = []
@@ -313,268 +280,6 @@ class PredictionService:
         if records:
             self._history_cache[code] = {"timestamp": time.time(), "data": list(records)}
         return records
-
-    def _normalize_news_time(self, value: Any) -> str:
-        text = str(value or "").strip()
-        if not text:
-            return ""
-        if text.isdigit():
-            try:
-                ts = int(text)
-                if ts > 10_000_000_000:
-                    ts = ts // 1000
-                return datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
-            except Exception:
-                return ""
-        try:
-            dt = pd.to_datetime(text, errors="coerce")
-            if pd.isna(dt):
-                return ""
-            return dt.strftime("%Y-%m-%d")
-        except Exception:
-            return ""
-
-    def _score_news_title(self, title: str) -> float:
-        text = str(title or "")
-        pos_hits = sum(1 for w in self.positive_words if w in text)
-        neg_hits = sum(1 for w in self.negative_words if w in text)
-        total = pos_hits + neg_hits
-        if total == 0:
-            return 0.0
-        return float((pos_hits - neg_hits) / total)
-
-    def _fetch_recent_news_items(self, limit: int = 120) -> List[Dict[str, Any]]:
-        try:
-            from flask_services.market_sentiment_service import MarketSentimentService
-            from flask_services.data_service import data_service
-
-            service = MarketSentimentService(data_service)
-            items = service._fetch_finance_news(limit=max(20, min(limit, 200)), sources=["akshare", "sina"])
-            return [
-                {"title": str(item.get("title", "")).strip(), "time": item.get("time") or item.get("published_at")}
-                for item in items
-                if str(item.get("title", "")).strip()
-            ]
-        except Exception:
-            pass
-
-        url = "https://feed.mix.sina.com.cn/api/roll/get"
-        headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-            ),
-            "Referer": "https://finance.sina.com.cn",
-        }
-        page_size = 50
-        pages = max(1, min(4, (limit + page_size - 1) // page_size))
-        rows: List[Dict[str, Any]] = []
-        seen = set()
-        session = requests.Session()
-        session.trust_env = False
-        for page in range(1, pages + 1):
-            params = {
-                "pageid": "153",
-                "lid": "2509",
-                "num": page_size,
-                "page": str(page),
-                "r": str(datetime.now().timestamp()),
-            }
-            try:
-                resp = session.get(url, params=params, headers=headers, timeout=10)
-            except Exception:
-                continue
-            if resp.status_code != 200:
-                continue
-            try:
-                payload = resp.json()
-            except Exception:
-                continue
-            items = payload.get("result", {}).get("data", [])
-            for item in items:
-                title = str(item.get("title", "")).strip()
-                if not title:
-                    continue
-                key = title.lower()
-                if key in seen:
-                    continue
-                seen.add(key)
-                rows.append(
-                    {
-                        "title": title,
-                        "time": item.get("ctime"),
-                    }
-                )
-            if len(rows) >= limit:
-                break
-        return rows[:limit]
-
-    def _build_daily_sentiment_map(self, news_items: List[Dict[str, Any]]) -> Dict[str, Dict[str, float]]:
-        by_day: Dict[str, List[float]] = {}
-        by_day_pos: Dict[str, int] = {}
-        by_day_neg: Dict[str, int] = {}
-
-        for item in news_items:
-            day = self._normalize_news_time(item.get("time"))
-            if not day:
-                continue
-            score = self._score_news_title(item.get("title", ""))
-            by_day.setdefault(day, []).append(score)
-            if score > 0:
-                by_day_pos[day] = by_day_pos.get(day, 0) + 1
-            elif score < 0:
-                by_day_neg[day] = by_day_neg.get(day, 0) + 1
-
-        result: Dict[str, Dict[str, float]] = {}
-        for day, scores in by_day.items():
-            n = max(1, len(scores))
-            avg = float(sum(scores) / n)
-            pos = by_day_pos.get(day, 0)
-            neg = by_day_neg.get(day, 0)
-            hit = pos + neg
-            conf = min(1.0, hit / n)
-            metrics = {
-                "sentiment_score": avg,
-                "sentiment_confidence": float(conf),
-                "positive_ratio": float(pos / n),
-                "negative_ratio": float(neg / n),
-                "target_match_count": float(hit),
-            }
-            result[day] = metrics
-            try:
-                from flask_services.feature_history_store import feature_history_store
-
-                feature_history_store.record_sentiment_daily(day, metrics)
-            except Exception:
-                pass
-        return result
-
-    def _merge_point_in_time_maps(
-        self, live_daily_map: Dict[str, Dict[str, float]]
-    ) -> Tuple[Dict[str, Dict[str, float]], Dict[str, float]]:
-        try:
-            from flask_services.feature_history_store import feature_history_store
-
-            sentiment_map = feature_history_store.get_sentiment_map()
-            breadth_map = feature_history_store.get_breadth_map()
-        except Exception:
-            sentiment_map = {}
-            breadth_map = {}
-        merged_sentiment = {**sentiment_map, **(live_daily_map or {})}
-        return merged_sentiment, breadth_map
-
-    def _get_sentiment_snapshot(self, symbol: str) -> Dict[str, Any]:
-        cached = self._sentiment_cache.get(self._market_sentiment_cache_key)
-        if cached and (time.time() - cached.get("timestamp", 0) < self.sentiment_cache_timeout):
-            return cached.get("data", {})
-
-        news_items = self._fetch_recent_news_items(limit=120)
-        daily_map = self._build_daily_sentiment_map(news_items)
-        market_breadth = 0.0
-        try:
-            from flask_services.data_service import data_service
-
-            overview = data_service.get_market_overview(force_refresh=False)
-            rising = float(overview.get("rising_stocks", 0))
-            falling = float(overview.get("falling_stocks", 0))
-            total = float(max(1, overview.get("total_stocks", rising + falling)))
-            market_breadth = (rising - falling) / total
-        except Exception:
-            market_breadth = 0.0
-
-        payload = {
-            "daily_map": daily_map,
-            "market_breadth": float(market_breadth),
-            "fetched_at": datetime.now().strftime("%Y-%m-%d"),
-        }
-        merged_sentiment, breadth_map = self._merge_point_in_time_maps(daily_map)
-        payload["daily_map"] = merged_sentiment
-        payload["breadth_map"] = breadth_map
-        self._sentiment_cache[self._market_sentiment_cache_key] = {"timestamp": time.time(), "data": payload}
-        return payload
-
-    def _enrich_with_sentiment_features(self, df: pd.DataFrame, symbol: str) -> pd.DataFrame:
-        if "date" not in df.columns:
-            return df
-
-        try:
-            snap = self._get_sentiment_snapshot(symbol)
-        except Exception:
-            snap = {"daily_map": {}, "breadth_map": {}, "market_breadth": 0.0, "fetched_at": ""}
-
-        from flask_services.feature_history_store import feature_history_store
-
-        daily_map: Dict[str, Dict[str, float]] = snap.get("daily_map", {}) or {}
-        breadth_map: Dict[str, float] = dict(snap.get("breadth_map", {}) or {})
-        fetched_at = str(snap.get("fetched_at") or "")[:10]
-        live_breadth = float(snap.get("market_breadth", 0.0) or 0.0)
-        if fetched_at and live_breadth:
-            breadth_map.setdefault(fetched_at, live_breadth)
-
-        out = df.copy()
-        out["date"] = pd.to_datetime(out["date"], errors="coerce")
-        out = out.dropna(subset=["date"]).sort_values("date")
-        trading_days = out["date"].dt.strftime("%Y-%m-%d").tolist()
-
-        last_known = {
-            "sentiment_score": 0.0,
-            "sentiment_confidence": 0.0,
-            "positive_ratio": 0.0,
-            "negative_ratio": 0.0,
-            "target_match_count": 0.0,
-        }
-        last_sent_day: datetime | None = None
-        last_breadth = 0.0
-
-        score_vals = []
-        conf_vals = []
-        pos_vals = []
-        neg_vals = []
-        breadth_vals = []
-        hit_vals = []
-        decay_vals = []
-        avail_vals = []
-
-        for dt in out["date"]:
-            day = dt.strftime("%Y-%m-%d")
-            lag_day = feature_history_store.prev_trading_day(trading_days, day)
-            row = daily_map.get(lag_day) if lag_day else None
-            if row:
-                last_known = row
-                last_sent_day = dt
-                available = 1.0
-                decay = 1.0
-            else:
-                available = 0.0
-                if last_sent_day is None:
-                    decay = 0.0
-                else:
-                    gap = max(0, int((dt - last_sent_day).days))
-                    decay = float(np.exp(-gap / 7.0))
-
-            if lag_day and lag_day in breadth_map:
-                last_breadth = float(breadth_map.get(lag_day, 0.0) or 0.0)
-            breadth_val = last_breadth if lag_day else 0.0
-
-            score_vals.append(float(last_known.get("sentiment_score", 0.0)))
-            conf_vals.append(float(last_known.get("sentiment_confidence", 0.0)))
-            pos_vals.append(float(last_known.get("positive_ratio", 0.0)))
-            neg_vals.append(float(last_known.get("negative_ratio", 0.0)))
-            breadth_vals.append(float(breadth_val))
-            hit_vals.append(float(last_known.get("target_match_count", 0.0)))
-            decay_vals.append(float(decay))
-            avail_vals.append(float(available))
-
-        out["sentiment_score_lag1"] = score_vals
-        out["sentiment_confidence_lag1"] = conf_vals
-        out["positive_ratio_lag1"] = pos_vals
-        out["negative_ratio_lag1"] = neg_vals
-        out["market_breadth_lag1"] = breadth_vals
-        out["target_match_count_lag1"] = hit_vals
-        out["sentiment_decay_lag1"] = decay_vals
-        out["sentiment_available"] = avail_vals
-        out["date"] = out["date"].dt.strftime("%Y-%m-%d")
-        return out
 
     def _load_history_df(self, symbol: str, min_rows: int = 80) -> pd.DataFrame:
         normalized_symbol = self._normalize_symbol(symbol)
@@ -603,47 +308,109 @@ class PredictionService:
         if "date" in df.columns:
             df = df.sort_values("date")
 
-        df = self._enrich_with_sentiment_features(df, normalized_symbol)
-
         if len(df) < min_rows:
             raise ValueError(f"Insufficient history for {normalized_symbol}: {len(df)} rows")
 
         return df
 
-    def _ensure_model_ready(self, symbol: str, horizon: int, up_threshold: float) -> pd.DataFrame:
-        key = (symbol, horizon, round(float(up_threshold), 6))
+    @staticmethod
+    def _truncate_df_as_of(df: pd.DataFrame, as_of_date: Optional[str]) -> pd.DataFrame:
+        if not as_of_date or "date" not in df.columns:
+            return df
+        work = df.copy()
+        work["date"] = pd.to_datetime(work["date"], errors="coerce")
+        cutoff = pd.to_datetime(str(as_of_date), errors="coerce")
+        if pd.isna(cutoff):
+            return df
+        trimmed = work[work["date"] <= cutoff].sort_values("date")
+        if len(trimmed) < 80:
+            raise ValueError(f"Insufficient history as of {as_of_date}: {len(trimmed)} rows")
+        return trimmed
+
+    def _ensure_model_ready(
+        self,
+        symbol: str,
+        horizon: int,
+        up_threshold: float,
+        as_of_date: Optional[str] = None,
+        task_id: Optional[str] = None,
+    ) -> pd.DataFrame:
+        as_of_key = str(as_of_date or "")
+        key = (symbol, horizon, round(float(up_threshold), 6), as_of_key)
         df = self._load_history_df(symbol)
+        df = self._truncate_df_as_of(df, as_of_date)
 
         last_train = self._trained_models.get(key)
         if last_train is None or (time.time() - last_train) > self.cache_timeout:
             with self._model_lock:
                 last_train = self._trained_models.get(key)
                 if last_train is None or (time.time() - last_train) > self.cache_timeout:
-                    self.predictor.train(df, horizon=horizon, up_threshold=up_threshold, fast=True)
+                    kwargs = {}
+                    if task_id:
+                        from training_viz.reporter import create_reporter
+                        from flask_services.task_manager import task_manager as tm
+
+                        reporter = create_reporter(tm, task_id)
+                        model_ids = [
+                            f"{l}:{n}"
+                            for l, n, _ in self.predictor._iter_all_models()
+                        ]
+                        reporter.init_models(model_ids)
+                        kwargs["progress_callback"] = reporter.on_callback
+                    self.predictor.train(
+                        df, horizon=horizon, up_threshold=up_threshold, fast=True, **kwargs
+                    )
                     self._trained_models[key] = time.time()
 
         return df
 
     def predict_stock(
-        self, symbol: str, horizon: int = 5, up_threshold: float = 0.02
+        self,
+        symbol: str,
+        horizon: int = 5,
+        up_threshold: float = 0.02,
+        as_of_date: Optional[str] = None,
+        record_signal: bool = True,
+        task_id: Optional[str] = None,
     ) -> Dict[str, Any]:
+        from flask_services.task_manager import task_manager
+
         threshold = float(up_threshold)
-        cache_key = f"prediction_{symbol}_{horizon}_{threshold:.4f}"
-        if cache_key in self.cache:
+        as_of_key = str(as_of_date or "")
+        cache_key = f"prediction_{symbol}_{horizon}_{threshold:.4f}_{as_of_key}"
+        if not as_of_date and cache_key in self.cache:
             cache_time = self.cache[cache_key]["timestamp"]
             if time.time() - cache_time < self.cache_timeout:
+                if task_id:
+                    task_manager.complete(task_id, self.cache[cache_key]["data"])
                 return self.cache[cache_key]["data"]
 
-        df = self._ensure_model_ready(symbol, horizon, threshold)
+        if task_id:
+            task_manager.update_progress(task_id, 10, "loading_data", f"获取 {symbol} 历史数据...")
+
+        df = self._ensure_model_ready(symbol, horizon, threshold, as_of_date=as_of_date, task_id=task_id)
+
+        if task_id:
+            if task_manager.is_cancelled(task_id):
+                raise Exception("Task cancelled by user")
+            task_manager.update_progress(task_id, 70, "generating_prediction", "Generating prediction...")
+
         prediction_raw = self.predictor.predict(df, horizon)
+
         explanation = self.predictor.get_prediction_explanation(prediction_raw)
 
         result = {
             "symbol": symbol,
             "horizon": horizon,
             "up_threshold": threshold,
+            "as_of_date": as_of_date,
+            "replay_mode": bool(as_of_date),
             "prediction": prediction_raw["prediction"],
+            "raw_prediction": prediction_raw.get("raw_prediction", prediction_raw["prediction"]),
             "direction": "up" if prediction_raw["prediction"] == 1 else "down",
+            "raw_direction": "up" if prediction_raw.get("raw_prediction", prediction_raw["prediction"]) == 1 else "down",
+            "trade_allowed": bool(prediction_raw.get("trade_allowed", False)),
+            "trade_reasons": list(prediction_raw.get("trade_reasons") or []),
             "confidence": prediction_raw["confidence"],
             "individual_predictions": prediction_raw["individual_predictions"],
             "probabilities": prediction_raw["probabilities"],
@@ -655,9 +422,32 @@ class PredictionService:
             "timestamp": time.time(),
         }
 
-        self.cache[cache_key] = {"timestamp": time.time(), "data": result}
-        self._append_history_entry("predictions", self._build_prediction_history_entry(result))
+        if not as_of_date:
+            self.cache[cache_key] = {"timestamp": time.time(), "data": result}
+            self._append_history_entry("predictions", self._build_prediction_history_entry(result))
+        if record_signal and not as_of_date:
+            self._record_signal_log(result)
+        if task_id:
+            task_manager.complete(task_id, result)
         return result
+
+    def _record_signal_log(self, result: Dict[str, Any]) -> None:
+        try:
+            from flask_services.investment_service import investment_service
+
+            layer = result.get("layer_outputs") or {}
+            investment_service.signal_tracker.record(
+                symbol=result.get("symbol", ""),
+                prediction=int(result.get("prediction", 0)),
+                direction=str(result.get("direction", "down")),
+                confidence=float(result.get("confidence") or 0),
+                horizon=int(result.get("horizon", 5)),
+                up_threshold=float(result.get("up_threshold", 0.02)),
+                ensemble_up=layer.get("ensemble_up"),
+            )
+            investment_service._resolve_signals_lazy()
+        except Exception:
+            pass
 
     def backtest_strategy(
         self,
@@ -667,13 +457,30 @@ class PredictionService:
         test_size: float = 0.2,
         up_threshold: float = 0.02,
         min_confidence: float = 0.0,
+        task_id: Optional[str] = None,
     ) -> Dict[str, Any]:
+        from flask_services.task_manager import task_manager
+
         strategy_key = (strategy or "default").lower()
         if strategy_key in {"default", "ensemble", "ml"}:
             strategy_key = "ensemble_ml"
 
         threshold = float(up_threshold)
+
+        if task_id:
+            task_manager.update_progress(task_id, 10, "loading_data", f"获取 {symbol} 历史数据...")
+
         df = self._load_history_df(symbol)
+
+        if task_id:
+            if task_manager.is_cancelled(task_id):
+                raise Exception("Task cancelled by user")
+            task_manager.update_progress(task_id, 25, "training_models", "执行回测前训练...")
+
+        if task_id:
+            if task_manager.is_cancelled(task_id):
+                raise Exception("Task cancelled by user")
+            task_manager.update_progress(task_id, 40, "running_backtest", "运行回测与 PnL 模拟...")
 
         backtest_result = self.predictor.backtest(
             df,
@@ -683,6 +490,9 @@ class PredictionService:
             up_threshold=threshold,
             min_confidence=float(min_confidence or 0.0),
         )
+
+        if task_id:
+            task_manager.update_progress(task_id, 80, "building_result", "构建回测报告...")
 
         result = {
             "symbol": symbol,
@@ -695,7 +505,6 @@ class PredictionService:
             "baseline_accuracy": backtest_result["baseline_accuracy"],
             "improvement": backtest_result["improvement"],
             "feature_importance": backtest_result.get("feature_importance", {}),
-            "sentiment_comparison": backtest_result.get("sentiment_comparison", {}),
             "walk_forward": backtest_result.get("results", {}).get("walk_forward", {}),
             "purged_embargo": backtest_result.get("purged_embargo", horizon),
             "train_size": backtest_result.get("train_size"),
@@ -705,6 +514,8 @@ class PredictionService:
             "timestamp": time.time(),
         }
         self._append_history_entry("backtests", self._build_backtest_history_entry(result))
+        if task_id:
+            task_manager.complete(task_id, result)
         return result
 
     def get_model_info(self) -> Dict[str, Any]:

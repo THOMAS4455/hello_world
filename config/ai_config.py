@@ -1,17 +1,20 @@
 """
-AI配置文件
+AI configuration — reads from environment variables with sensible defaults.
+Set DEEPSEEK_API_KEY in your .env file or environment to override the default.
 """
 
-# DeepSeek API配置
-DEEPSEEK_API_KEY = "sk-REDACTED"
-DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
+import os
 
-# AI模型配置
-DEFAULT_MODEL = "deepseek-chat"
-MAX_TOKENS = 2000
-TEMPERATURE = 0.7
+# DeepSeek API configuration
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+DEEPSEEK_API_URL = os.getenv("DEEPSEEK_API_URL", "https://api.deepseek.com/v1/chat/completions")
 
-# AI服务配置
-AI_TIMEOUT = 30
-RETRY_COUNT = 3
-RETRY_DELAY = 1
+# AI model configuration
+DEFAULT_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+MAX_TOKENS = int(os.getenv("DEEPSEEK_MAX_TOKENS", "2000"))
+TEMPERATURE = float(os.getenv("DEEPSEEK_TEMPERATURE", "0.7"))
+
+# AI service configuration
+AI_TIMEOUT = int(os.getenv("DEEPSEEK_TIMEOUT", "30"))
+RETRY_COUNT = int(os.getenv("DEEPSEEK_RETRY_COUNT", "3"))
+RETRY_DELAY = float(os.getenv("DEEPSEEK_RETRY_DELAY", "1"))

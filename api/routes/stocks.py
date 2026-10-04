@@ -5,7 +5,7 @@ import time
 
 from fastapi import APIRouter, Query
 
-from api.common import error_response, extract_stock_list, run_blocking, success_response, to_market_symbol
+from api.common import ServiceError, error_response, extract_stock_list, run_blocking, success_response, to_market_symbol
 from api.services import data_service
 
 router = APIRouter(tags=["stocks"])
@@ -15,7 +15,7 @@ def _build_history_from_sina(symbol: str, limit: int = 120) -> list[dict]:
     import akshare as ak
 
     market_symbol = to_market_symbol(symbol)
-    df = ak.stock_zh_a_daily(symbol=market_symbol, adjust="")
+    df = ak.stock_zh_a_daily(symbol=market_symbol, adjust="qfq")
     if df is None or df.empty:
         return []
 
@@ -44,6 +44,8 @@ async def get_stocks_data_health():
     try:
         payload = await run_blocking(data_service.get_data_health, timeout=10.0)
         return success_response(payload)
+    except ServiceError:
+        raise
     except Exception as exc:
         return error_response(str(exc))
 
@@ -56,12 +58,14 @@ async def get_trading_session():
 @router.get("/api/stocks")
 async def get_stocks(
     limit: int = Query(default=0, ge=0, le=5000),
-    refresh: bool = Query(default=True),
+    refresh: bool = Query(default=False),
 ):
     try:
         stocks_response = await run_blocking(data_service.get_stocks, limit, refresh, timeout=180.0)
     except asyncio.TimeoutError:
         return error_response("stock service timeout", {"stocks": [], "total": 0, "returned": 0})
+    except ServiceError:
+        raise
     except Exception as exc:
         return error_response(str(exc), {"stocks": [], "total": 0, "returned": 0})
 
@@ -80,12 +84,17 @@ async def get_stocks(
 
 
 @router.get("/api/stocks/search")
-async def search_stocks(q: str = Query(default="", max_length=128)):
+async def search_stocks(
+    q: str = Query(default="", max_length=128),
+    limit: int = Query(default=20, ge=1, le=50),
+):
     try:
-        refresh = data_service.get_trading_session_status().get("should_auto_refresh", False)
-        stocks_response = await run_blocking(data_service.get_stocks, 0, refresh, timeout=180.0)
+        # Search filters cached market data; avoid full live refresh for responsiveness.
+        stocks_response = await run_blocking(data_service.get_stocks, 0, False, timeout=90.0)
     except asyncio.TimeoutError:
         return error_response("stock service timeout", {"stocks": [], "total": 0})
+    except ServiceError:
+        raise
     except Exception as exc:
         return error_response(str(exc), {"stocks": [], "total": 0})
 
@@ -99,9 +108,9 @@ async def search_stocks(q: str = Query(default="", max_length=128)):
             or keyword in str(stock.get("name", "")).lower()
         ]
     else:
-        filtered = stocks[:10]
+        filtered = stocks[:limit]
 
-    return success_response({"stocks": filtered, "total": len(filtered)})
+    return success_response({"stocks": filtered[:limit], "total": min(len(filtered), limit)})
 
 
 @router.get("/api/stocks/realtime")
@@ -111,6 +120,8 @@ async def get_realtime_stocks():
         stocks_response = await run_blocking(data_service.get_stocks, 20, refresh, timeout=180.0)
     except asyncio.TimeoutError:
         return error_response("stock service timeout", {"timestamp": time.time(), "stocks": []})
+    except ServiceError:
+        raise
     except Exception as exc:
         return error_response(str(exc), {"timestamp": time.time(), "stocks": []})
 
@@ -136,6 +147,8 @@ async def get_market_overview(refresh: bool = Query(default=True)):
         return success_response(overview)
     except asyncio.TimeoutError:
         return error_response("market overview timeout")
+    except ServiceError:
+        raise
     except Exception as exc:
         return error_response(str(exc))
 
@@ -154,5 +167,7 @@ async def get_stock_detail(symbol: str):
         return success_response(detail)
     except asyncio.TimeoutError:
         return error_response("stock detail timeout")
+    except ServiceError:
+        raise
     except Exception as exc:
         return error_response(str(exc))

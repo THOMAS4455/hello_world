@@ -117,8 +117,6 @@ async def admin_feature_history_backfill(
         payload = await run_blocking(
             feature_history_backfill_service.run,
             days=request.days,
-            news_limit=request.news_limit,
-            fill_sentiment=request.fill_sentiment,
             fill_breadth=request.fill_breadth,
             overwrite=request.overwrite,
             timeout=300.0,

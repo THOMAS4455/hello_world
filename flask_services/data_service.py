@@ -10,6 +10,7 @@ Strategy:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 from contextlib import contextmanager
@@ -18,6 +19,8 @@ from pathlib import Path
 from threading import Lock, Thread
 from typing import Any, Dict, Iterable, List, Optional
 from zoneinfo import ZoneInfo
+
+logger = logging.getLogger(__name__)
 
 import requests
 
@@ -28,7 +31,7 @@ class DataService:
         self.cache_timeout = 60
         self.disk_cache_ttl = 24 * 3600
         self.max_stale_fallback = 3 * 24 * 3600
-        self.live_only_market_data = True
+        self.live_only_market_data = False
         self.trading_session_aware = True
         self.intraday_cache_timeout = 60
         self.market_timezone = ZoneInfo("Asia/Shanghai")
@@ -1084,13 +1087,26 @@ class DataService:
         if not self.has_real_data:
             raise Exception("Real data mode is disabled")
 
+        # When refresh=False, serve cached data first (don't block on live fetch)
+        if not force_refresh:
+            disk_cached = self._read_stocks_disk_cache()
+            if disk_cached and isinstance(disk_cached.get("stocks"), list) and disk_cached["stocks"]:
+                return self._limit_payload(
+                    self._build_payload_from_disk_cache(disk_cached, "Using cached snapshot"),
+                    limit,
+                )
+
         try:
             live = self._fetch_live_payload()
         except Exception as exc:
+            logger.warning("Live fetch failed: %s", exc)
             disk_cached = self._read_stocks_disk_cache()
             if disk_cached and isinstance(disk_cached.get("stocks"), list) and disk_cached["stocks"]:
                 cache_age = time.time() - float(disk_cached.get("timestamp", 0) or 0)
                 if cache_age <= self.max_stale_fallback:
+                    logger.warning(
+                        "Falling back to disk cache (%ds old)", int(cache_age)
+                    )
                     payload = self._build_payload_from_disk_cache(
                         disk_cached,
                         f"Live fetch failed; showing last successful snapshot ({int(cache_age)}s old): {exc}",
@@ -1239,7 +1255,7 @@ class DataService:
                 period="daily",
                 start_date=start_date,
                 end_date=end_date,
-                adjust="",
+                adjust="qfq",
             )
             if not history_df.empty:
                 for _, row in history_df.tail(120).iterrows():
@@ -1261,7 +1277,7 @@ class DataService:
 
         if not history:
             try:
-                daily_df = ak.stock_zh_a_daily(symbol=self._to_market_symbol(symbol), adjust="")
+                daily_df = ak.stock_zh_a_daily(symbol=self._to_market_symbol(symbol), adjust="qfq")
                 if daily_df is not None and not daily_df.empty:
                     for _, row in daily_df.tail(120).iterrows():
                         date_value = row.get("date")
@@ -1347,7 +1363,7 @@ class DataService:
             breadth = (rising_stocks - falling_stocks) / max(1, total_stocks)
             feature_history_store.record_market_breadth(trading_date, float(breadth))
         except Exception:
-            pass
+            logger.debug("Failed to record market breadth to feature history", exc_info=True)
         if not self.live_only_market_data:
             self._set_cache(cache_key, overview)
         return overview

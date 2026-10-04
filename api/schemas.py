@@ -115,7 +115,75 @@ class BacktestRequest(BaseModel):
 
 class FeatureHistoryBackfillRequest(BaseModel):
     days: int = Field(default=90, ge=7, le=365)
-    news_limit: int = Field(default=300, ge=50, le=500)
-    fill_sentiment: bool = True
     fill_breadth: bool = True
     overwrite: bool = False
+
+
+class WatchlistUpdateRequest(BaseModel):
+    symbols: list[str] = Field(default_factory=list, max_length=20)
+
+    @field_validator("symbols")
+    @classmethod
+    def strip_symbols(cls, values: list[str]) -> list[str]:
+        return [str(v).strip() for v in values if str(v).strip()]
+
+
+class PortfolioConfigUpdateRequest(BaseModel):
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
+class PortfolioBacktestRequest(BaseModel):
+    symbols: Optional[list[str]] = None
+    weight_mode: str = Field(default="equal", max_length=32)
+    strategy: str = Field(default="default", max_length=64)
+    horizon: int = Field(default=5, ge=1, le=60)
+    test_size: float = Field(default=0.2, gt=0.0, lt=1.0)
+    up_threshold: float = Field(default=0.02, ge=0.0, le=1.0)
+    min_confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    max_symbols: int = Field(default=10, ge=1, le=20)
+
+
+class PaperAccountCreateRequest(BaseModel):
+    initial_capital: Optional[float] = Field(default=None, gt=0.0, le=100_000_000.0)
+
+
+class HoldingAdviceItem(BaseModel):
+    symbol: str = Field(..., min_length=1, max_length=32)
+    quantity: int = Field(..., gt=0, le=100_000_000)
+    available_quantity: Optional[int] = Field(default=None, ge=0, le=100_000_000)
+    average_cost: float = Field(..., gt=0, le=100_000_000)
+
+    @field_validator("symbol")
+    @classmethod
+    def strip_symbol(cls, value: str) -> str:
+        return value.strip()
+
+
+class HoldingAdviceRequest(BaseModel):
+    holdings: list[HoldingAdviceItem] = Field(default_factory=list, max_length=50)
+
+
+class CandidateResearchRequest(BaseModel):
+    symbols: list[str] = Field(default_factory=list, min_length=1, max_length=50)
+    min_score: float = Field(default=0.60, ge=0.0, le=1.0)
+    top_n: int = Field(default=10, ge=1, le=30)
+
+    @field_validator("symbols")
+    @classmethod
+    def strip_candidate_symbols(cls, values: list[str]) -> list[str]:
+        return list(dict.fromkeys(str(v).strip() for v in values if str(v).strip()))
+
+
+class TradingAgentsRequest(BaseModel):
+    symbol: str = Field(..., min_length=1, max_length=32)
+
+    @field_validator("symbol")
+    @classmethod
+    def strip_trading_agents_symbol(cls, value: str) -> str:
+        return value.strip()
+
+
+class ScreenerRunRequest(BaseModel):
+    top_n: int = Field(default=5, ge=1, le=10)
+    capital: float = Field(default=100_000.0, ge=1_000.0, le=100_000_000.0)
+    min_confidence: float = Field(default=0.55, ge=0.0, le=1.0)

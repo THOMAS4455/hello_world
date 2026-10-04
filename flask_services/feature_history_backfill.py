@@ -1,5 +1,5 @@
 """
-Batch backfill for point-in-time sentiment and market breadth features.
+Batch backfill for point-in-time market breadth features.
 
 Breadth backfill uses CSI/Shanghai index daily returns as a bounded proxy when
 historical advance/decline counts are unavailable.
@@ -15,7 +15,6 @@ from flask_services.feature_history_store import FeatureHistoryStore, feature_hi
 
 class FeatureHistoryBackfillService:
     MAX_DAYS = 365
-    MAX_NEWS_LIMIT = 500
     INDEX_PROXY_SCALE = 0.03
 
     def __init__(self, store: Optional[FeatureHistoryStore] = None) -> None:
@@ -28,30 +27,19 @@ class FeatureHistoryBackfillService:
         self,
         *,
         days: int = 90,
-        news_limit: int = 300,
-        fill_sentiment: bool = True,
         fill_breadth: bool = True,
         overwrite: bool = False,
     ) -> Dict[str, Any]:
         window_days = max(1, min(int(days or 90), self.MAX_DAYS))
-        limit = max(20, min(int(news_limit or 300), self.MAX_NEWS_LIMIT))
         cutoff = (datetime.now() - timedelta(days=window_days)).strftime("%Y-%m-%d")
 
         result: Dict[str, Any] = {
             "requested_days": window_days,
             "cutoff_date": cutoff,
             "overwrite": bool(overwrite),
-            "sentiment": {"enabled": fill_sentiment, "written": 0, "skipped": 0, "days": 0},
             "breadth": {"enabled": fill_breadth, "written": 0, "skipped": 0, "days": 0, "source": "index_proxy"},
             "errors": [],
         }
-
-        if fill_sentiment:
-            try:
-                sentiment_stats = self._backfill_sentiment(limit, cutoff, overwrite)
-                result["sentiment"].update(sentiment_stats)
-            except Exception as exc:
-                result["errors"].append(f"sentiment: {exc}")
 
         if fill_breadth:
             try:
@@ -62,29 +50,6 @@ class FeatureHistoryBackfillService:
 
         result["status"] = self.get_status()
         return result
-
-    def _backfill_sentiment(self, news_limit: int, cutoff: str, overwrite: bool) -> Dict[str, Any]:
-        from flask_services.prediction_service import prediction_service
-
-        items = prediction_service._fetch_recent_news_items(limit=news_limit)
-        daily_map = prediction_service._build_daily_sentiment_map(items)
-
-        written = 0
-        skipped = 0
-        for day, metrics in daily_map.items():
-            if str(day)[:10] < cutoff:
-                continue
-            if self.store.record_sentiment_daily(day, metrics, overwrite=overwrite):
-                written += 1
-            else:
-                skipped += 1
-
-        return {
-            "written": written,
-            "skipped": skipped,
-            "days": len([d for d in daily_map if str(d)[:10] >= cutoff]),
-            "news_items": len(items),
-        }
 
     def _backfill_breadth_index_proxy(
         self, window_days: int, cutoff: str, overwrite: bool
