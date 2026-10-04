@@ -7,6 +7,7 @@ __pycache__/
 venv/
 env/
 ENV/
+.venv/
 *.egg-info/
 dist/
 build/
@@ -22,6 +23,7 @@ build/
 models/saved_models/*.h5
 models/saved_models/*.pkl
 models/saved_models/*.joblib
+data/models/
 
 # Data cache
 data/storage/*.csv
@@ -30,6 +32,15 @@ data/prediction_runs.json
 data/sessions.json
 data/stocks_cache.json
 data/feature_history/
+
+# Runtime state and generated artifacts (never commit: contains real user accounts)
+data/*.json
+data/**/*.json
+data/market.sqlite
+data/live_eval/
+config/model_config.yaml
+.env.docker
+.kiro/
 
 # IDE
 .vscode/
