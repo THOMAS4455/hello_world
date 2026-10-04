@@ -48,8 +48,6 @@ const Predictions = lazyWithRetry(() => import('./pages/Predictions'), 'Predicti
 const Register = lazyWithRetry(() => import('./pages/Register'), 'Register');
 const Settings = lazyWithRetry(() => import('./pages/Settings'), 'Settings');
 const StockDetail = lazyWithRetry(() => import('./pages/StockDetail'), 'StockDetail');
-const TestConnection = lazyWithRetry(() => import('./pages/TestConnection'), 'TestConnection');
-const TestData = lazyWithRetry(() => import('./pages/TestData'), 'TestData');
 const TrainingMonitor = lazyWithRetry(() => import('./pages/TrainingMonitor'), 'TrainingMonitor');
 const UserProfile = lazyWithRetry(() => import('./pages/UserProfile'), 'UserProfile');
 const InvestmentLayout = lazyWithRetry(() => import('./layouts/InvestmentLayout'), 'InvestmentLayout');
@@ -202,11 +200,6 @@ function AppContent() {
                   </RequireAuth>
                 }
               />
-              <Route path="/simple-stock/:symbol" element={<StockDetail />} />
-              <Route path="/enhanced" element={<Dashboard />} />
-              <Route path="/enterprise" element={<Dashboard />} />
-              <Route path="/test" element={<TestData />} />
-              <Route path="/test-connection" element={<TestConnection />} />
               <Route
                 path="/training-monitor"
                 element={
