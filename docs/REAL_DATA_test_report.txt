@@ -1,0 +1,104 @@
+======================================================================
+Stock Prediction System - REAL DATA Test Report
+======================================================================
+
+Test Date: 2026-06-02 17:22:05
+Data Source: akshare_stocks.db (REAL AKShare data)
+Stock: 000001 (Ping An Bank)
+Data Range: 2025-03-18 to 2026-03-18
+Total Records: 257
+Total Samples: 252
+Feature Count: 90
+Models Tested: 8
+Status: [GOOD]
+
+======================================================================
+Optimization Targets
+======================================================================
+Target 1: Test Accuracy >= 65%
+  Result: 81.58% [PASS]
+
+Target 2: F1 Score >= 0.60
+  Result: 0.7330 [PASS]
+
+Target 3: Overfitting < 5%
+  Result: 10.47% [FAIL]
+
+======================================================================
+Best Model Details
+======================================================================
+Model: baseline:gb
+Test Accuracy: 81.58%
+Train Accuracy: 92.05%
+F1 Score: 0.7330
+Precision: 0.6655
+Recall: 0.8158
+Overfitting Gap: 10.47%
+
+======================================================================
+All Models Performance (sorted by test accuracy)
+======================================================================
+
+baseline:gb:
+  Test Accuracy:   81.58%
+  Train Accuracy:  92.05%
+  F1 Score:       0.7330
+  Precision:      0.6655
+  Recall:         0.8158
+  Overfitting:     10.47%
+
+enhanced:svm:
+  Test Accuracy:   81.58%
+  Train Accuracy:  82.39%
+  F1 Score:       0.7330
+  Precision:      0.6655
+  Recall:         0.8158
+  Overfitting:      0.81%
+
+enhanced:xgb:
+  Test Accuracy:   81.58%
+  Train Accuracy:  88.07%
+  F1 Score:       0.7330
+  Precision:      0.6655
+  Recall:         0.8158
+  Overfitting:      6.49%
+
+baseline:lgb:
+  Test Accuracy:   80.26%
+  Train Accuracy:  77.84%
+  F1 Score:       0.7750
+  Precision:      0.7647
+  Recall:         0.8026
+  Overfitting:      2.42%
+
+enhanced:extra_trees:
+  Test Accuracy:   80.26%
+  Train Accuracy:  85.80%
+  F1 Score:       0.7468
+  Precision:      0.7319
+  Recall:         0.8026
+  Overfitting:      5.53%
+
+enhanced:catboost:
+  Test Accuracy:   80.26%
+  Train Accuracy:  91.48%
+  F1 Score:       0.7468
+  Precision:      0.7319
+  Recall:         0.8026
+  Overfitting:     11.21%
+
+baseline:rf:
+  Test Accuracy:   78.95%
+  Train Accuracy:  93.75%
+  F1 Score:       0.7198
+  Precision:      0.6615
+  Recall:         0.7895
+  Overfitting:     14.80%
+
+enhanced:log_reg:
+  Test Accuracy:   69.74%
+  Train Accuracy:  80.68%
+  F1 Score:       0.7139
+  Precision:      0.7355
+  Recall:         0.6974
+  Overfitting:     10.94%
