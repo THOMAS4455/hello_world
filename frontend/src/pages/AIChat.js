@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Card, Container } from 'react-bootstrap';
+import { Alert, Card } from 'react-bootstrap';
 import { useAppI18n } from '../i18n';
 import AIChatInterface from '../components/AIChatInterface';
 import { handleApiError } from '../components/ErrorHandler';
@@ -73,7 +73,7 @@ const AIChat = () => {
   };
 
   return (
-    <Container className="ai-chat-page py-3 py-md-4">
+    <div className="analysis-page ai-chat-page">
       <Card className="ai-chat-shell">
         <Card.Header className="ai-chat-header">
           <PageLogo
@@ -96,7 +96,7 @@ const AIChat = () => {
           <AIChatInterface messages={messages} loading={loading} onSendMessage={handleSendMessage} />
         </Card.Body>
       </Card>
-    </Container>
+    </div>
   );
 };
 

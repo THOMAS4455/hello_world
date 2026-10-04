@@ -1,10 +1,9 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Badge, Button, Container, Nav, Navbar } from 'react-bootstrap';
+import { Button, Container, Nav, Navbar } from 'react-bootstrap';
 import { useDispatch, useSelector } from 'react-redux';
 import { useAppI18n } from '../i18n';
 import { useLogoutSessionMutation } from '../services/apiService';
-import PageLogo from './PageLogo';
 import { logout } from '../store/slices/authSlice';
 import '../styles/Navigation.css';
 
@@ -15,8 +14,7 @@ const Navigation = () => {
   const username = useSelector((state) => state?.auth?.user?.username || '');
   const roles = useSelector((state) => state?.auth?.roles || []);
   const isAdmin = Array.isArray(roles) && roles.some((role) => String(role).toLowerCase() === 'admin');
-  const { language, t } = useAppI18n();
-  const isEnglish = language === 'en-US';
+  const { t } = useAppI18n();
   const [logoutSession] = useLogoutSessionMutation();
 
   const handleLogout = async () => {
@@ -33,14 +31,8 @@ const Navigation = () => {
     <Navbar expand="lg" fixed="top" className="main-navbar">
       <Container fluid="xl">
         <Navbar.Brand as={NavLink} to="/" className="brand-text">
-          <PageLogo
-            title="AlphaScope"
-            subtitle={isEnglish ? 'Research Workspace' : '研究工作台'}
-            glyph="A"
-            tone="blue"
-            compact
-          />
-          <Badge className="brand-beta">BETA</Badge>
+          <span className="brand-mark" aria-hidden>A</span>
+          <span>AlphaScope</span>
         </Navbar.Brand>
         <Navbar.Toggle aria-controls="main-navbar-nav" />
         <Navbar.Collapse id="main-navbar-nav">
@@ -54,14 +46,8 @@ const Navigation = () => {
             <Nav.Link as={NavLink} to="/guide">
               {t('navGuide', 'Guide')}
             </Nav.Link>
-            <Nav.Link as={NavLink} to="/predictions">
-              {t('navPredictions')}
-            </Nav.Link>
-            <Nav.Link as={NavLink} to="/backtest">
-              {t('navBacktest')}
-            </Nav.Link>
-            <Nav.Link as={NavLink} to="/market-sentiment">
-              {t('navSentiment')}
+            <Nav.Link as={NavLink} to="/investment">
+              {t('navInvestment', 'Research')}
             </Nav.Link>
             <Nav.Link as={NavLink} to="/ai-chat">
               {t('navAiChat')}
@@ -85,14 +71,19 @@ const Navigation = () => {
                     {t('navAdmin')}
                   </Nav.Link>
                 )}
+                {isAdmin && (
+                  <Nav.Link as={NavLink} to="/training-monitor">
+                    🧪 训练监控
+                  </Nav.Link>
+                )}
                 <Nav.Link as={NavLink} to="/profile">
                   {t('navProfile')}
                 </Nav.Link>
                 <Nav.Link as={NavLink} to="/settings">
                   {t('navSettings', 'Settings')}
                 </Nav.Link>
-                <div className="nav-user">{username ? username : t('navProfile')}</div>
-                <Button variant="outline-light" size="sm" onClick={handleLogout} className="logout-btn">
+                <div className="nav-user">{username || t('navProfile')}</div>
+                <Button variant="outline-secondary" size="sm" onClick={handleLogout} className="logout-btn">
                   {t('navLogout')}
                 </Button>
               </>

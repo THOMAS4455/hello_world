@@ -65,8 +65,6 @@ const AdminPanel = () => {
   const [saveErr, setSaveErr] = useState('');
   const [featureForm, setFeatureForm] = useState({
     days: 90,
-    news_limit: 300,
-    fill_sentiment: true,
     fill_breadth: true,
     overwrite: false,
   });
@@ -118,7 +116,7 @@ const AdminPanel = () => {
       if (!resp?.success) {
         throw new Error(resp?.message || t('adminFeatureBackfillFailed'));
       }
-      const written = (resp?.data?.sentiment?.written || 0) + (resp?.data?.breadth?.written || 0);
+      const written = (resp?.data?.breadth?.written || 0);
       setFeatureMsg(`${t('adminFeatureBackfillDone')} (+${written})`);
       refetchFeatureHistory();
     } catch (err) {
@@ -182,13 +180,10 @@ const AdminPanel = () => {
             <div className="small text-muted mb-3">
               {t('adminFeatureBreadthCount')}: {featureStatus.breadth_days ?? 0}
               {featureStatus.breadth_range?.start ? ` (${featureStatus.breadth_range.start} ~ ${featureStatus.breadth_range.end})` : ''}
-              {' · '}
-              {t('adminFeatureSentimentCount')}: {featureStatus.sentiment_days ?? 0}
-              {featureStatus.sentiment_range?.start ? ` (${featureStatus.sentiment_range.start} ~ ${featureStatus.sentiment_range.end})` : ''}
             </div>
           )}
           <Row className="g-2 mb-2">
-            <Col md={3}>
+            <Col md={4}>
               <Form.Group>
                 <Form.Label>{t('adminFeatureBreadthDays')}</Form.Label>
                 <Form.Control
@@ -200,26 +195,7 @@ const AdminPanel = () => {
                 />
               </Form.Group>
             </Col>
-            <Col md={3}>
-              <Form.Group>
-                <Form.Label>{t('adminFeatureSentimentNews')}</Form.Label>
-                <Form.Control
-                  type="number"
-                  min={50}
-                  max={500}
-                  value={featureForm.news_limit}
-                  onChange={(e) => setFeatureForm((p) => ({ ...p, news_limit: Number(e.target.value) }))}
-                />
-              </Form.Group>
-            </Col>
-            <Col md={6} className="d-flex align-items-end gap-3 flex-wrap">
-              <Form.Check
-                type="switch"
-                id="fill-sentiment"
-                label={t('adminFeatureFillSentiment')}
-                checked={featureForm.fill_sentiment}
-                onChange={(e) => setFeatureForm((p) => ({ ...p, fill_sentiment: e.target.checked }))}
-              />
+            <Col md={8} className="d-flex align-items-end gap-3 flex-wrap">
               <Form.Check
                 type="switch"
                 id="fill-breadth"

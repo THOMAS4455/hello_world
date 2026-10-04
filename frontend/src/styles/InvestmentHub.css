@@ -1,0 +1,211 @@
+.investment-hub-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 260px);
+  gap: 28px;
+  align-items: end;
+  margin-bottom: var(--ds-section-gap);
+  padding: 0;
+}
+
+.investment-hub-hero-main {
+  min-width: 0;
+}
+
+.investment-hub-hero-main h1 {
+  margin: 6px 0 10px;
+}
+
+.investment-hub-hero-main p {
+  max-width: 40rem;
+  margin: 0;
+  font-size: var(--ds-body-size);
+  line-height: var(--ds-body-line);
+  color: var(--ds-text-secondary);
+}
+
+.investment-hub-hero-side {
+  display: grid;
+  gap: 10px;
+  align-content: end;
+}
+
+.investment-hero-stat {
+  padding: 14px 16px;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-bg-elevated);
+}
+
+.investment-hero-stat span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: var(--ds-caption-size);
+  font-weight: 500;
+  color: var(--ds-text-tertiary);
+}
+
+.investment-hero-stat strong {
+  display: block;
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ds-text);
+}
+
+.investment-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.investment-watchlist-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px 16px;
+  align-items: end;
+  margin-bottom: 16px;
+}
+
+.investment-watchlist-search {
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+.investment-watchlist-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.investment-watchlist-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-height: 40px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-bg-muted);
+}
+
+.investment-watchlist-chips .alert {
+  width: 100%;
+  margin: 0;
+}
+
+.investment-symbol-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-bg-elevated);
+  border: 1px solid var(--ds-border);
+  font-size: var(--ds-caption-size);
+  color: var(--ds-text);
+}
+
+.investment-symbol-chip button {
+  border: none;
+  background: transparent;
+  color: var(--ds-text-tertiary);
+  line-height: 1;
+  padding: 0;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.investment-symbol-chip button:hover {
+  color: var(--ds-market-up);
+}
+
+.investment-metric-card {
+  padding: 16px 18px;
+}
+
+.investment-metric-value--compact {
+  font-size: 1.125rem !important;
+}
+
+.investment-brief-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--ds-border);
+  font-size: var(--ds-subhead-size);
+}
+
+.investment-disclaimer {
+  border: 1px solid var(--ds-border);
+  border-left: 3px solid var(--ds-accent);
+  background: var(--ds-accent-soft);
+  color: var(--ds-text-secondary);
+  border-radius: var(--ds-radius-md);
+  font-size: var(--ds-subhead-size);
+  padding: 12px 14px;
+}
+
+.investment-tabs {
+  border-bottom: 1px solid var(--ds-border);
+  margin-bottom: 20px;
+  gap: 4px;
+}
+
+.investment-tabs .nav-link {
+  font-size: var(--ds-subhead-size);
+  font-weight: 500;
+  color: var(--ds-text-secondary);
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 10px 14px;
+  margin-right: 4px;
+}
+
+.investment-tabs .nav-link.active {
+  color: var(--ds-text);
+  border-bottom-color: var(--ds-text);
+  background: transparent;
+}
+
+.investment-settings-accordion .accordion-button {
+  font-size: var(--ds-subhead-size);
+  padding: 12px 16px;
+}
+
+@media (max-width: 992px) {
+  .investment-hub-hero {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .investment-hub-hero-side {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .investment-watchlist-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .investment-watchlist-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 575px) {
+  .investment-hub-hero-side {
+    grid-template-columns: 1fr;
+  }
+
+  .investment-brief-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

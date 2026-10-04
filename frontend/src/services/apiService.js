@@ -276,19 +276,19 @@ export const formatAIResponse = (response) => {
 
 export const formatPredictionResult = (prediction = {}) => ({
   ...prediction,
-  prediction: prediction.prediction === 1 ? '??' : prediction.prediction === 0 ? '??' : '??',
+  prediction: prediction.prediction === 1 ? '上涨' : prediction.prediction === 0 ? '下跌' : '震荡',
   confidence: Math.round(Number(prediction.confidence ?? 0) * 100),
-  explanation: prediction.explanation || '????',
+  explanation: prediction.explanation || '暂无解释',
   created_at: new Date().toLocaleString(),
 });
 
 export const handleApiError = (error) => {
-  if (error?.status === 401) return '??????????';
-  if (error?.status === 403) return '????';
-  if (error?.status === 404) return '???????';
-  if (error?.status === 429) return '????????????';
-  if (error?.status >= 500) return '???????????';
-  return error?.data?.message || error?.message || '????';
+  if (error?.status === 401) return '登录已过期，请重新登录';
+  if (error?.status === 403) return '权限不足';
+  if (error?.status === 404) return '资源不存在';
+  if (error?.status === 429) return '请求过于频繁，请稍后重试';
+  if (error?.status >= 500) return '服务器内部错误';
+  return error?.data?.message || error?.message || '请求失败';
 };
 
 export const retryQuery = (fn, maxRetries = 3, delay = 1000) => {

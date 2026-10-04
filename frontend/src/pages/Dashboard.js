@@ -5,17 +5,17 @@ import {
   Badge,
   Button,
   Card,
-  Col,
-  Container,
   Form,
   InputGroup,
   Pagination,
-  Row,
   Spinner,
 } from 'react-bootstrap';
 import { useAppI18n } from '../i18n';
+import AddToWatchlistButton from '../components/AddToWatchlistButton';
 import PageLogo from '../components/PageLogo';
+import { useWatchlist } from '../hooks/useWatchlist';
 import stockApiService from '../services/stockApi';
+import { getMarketChangeClass } from '../utils/stockUtils';
 import {
   getMarketAutoRefreshIntervalMs,
   isAshareTradingSession,
@@ -30,6 +30,7 @@ const Dashboard = () => {
   const { language, t } = useAppI18n();
   const isEnglish = language === 'en-US';
   const navigate = useNavigate();
+  const watchlistApi = useWatchlist();
   const [stocks, setStocks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -217,27 +218,24 @@ const Dashboard = () => {
     return `${num >= 0 ? '+' : ''}${num.toFixed(2)}%`;
   };
 
-  const getChangeClass = (value = 0) => {
-    if (value > 0) return 'text-success';
-    if (value < 0) return 'text-danger';
-    return 'text-muted';
-  };
+  const getChangeClass = (value = 0) => getMarketChangeClass(value);
 
   const isPartialMarketData = metrics.totalMarket > 0 && metrics.totalMarket < MIN_EXPECTED_STOCKS;
   const inTradingSession = dataFreshness?.in_trading_session ?? isAshareTradingSession();
   const usingSessionSnapshot = Boolean(dataFreshness?.refresh_skipped || (!dataFreshness?.is_live && !inTradingSession));
+  const isLive = !usingSessionSnapshot && !isPartialMarketData && totalStocks > 0;
 
   return (
-    <Container className="dashboard-page py-3 py-md-4">
+    <div className="analysis-page dashboard-page">
       <div className="dashboard-hero mb-4">
         <div>
-          <PageLogo
-            title={t('navDashboard')}
-            subtitle={t('dashboardSubtitle')}
-            glyph="D"
-            tone="blue"
-          />
-          <div className="hero-tag mb-2">{t('dashboardHeroTag')}</div>
+          <div className="hero-tag mb-2">
+            {t('dashboardHeroTag')}
+            <span className={`freshness-badge ms-2 ${isLive ? 'live' : 'stale'}`}>
+              <span className={`live-indicator ${isLive ? '' : 'stale'}`} />
+              {isLive ? (isEnglish ? 'Live' : '实时') : (isEnglish ? 'Snapshot' : '快照')}
+            </span>
+          </div>
           <h1 className="mb-2">{t('dashboardTitle')}</h1>
           <p className="mb-0">{t('dashboardDescription')}</p>
         </div>
@@ -245,49 +243,38 @@ const Dashboard = () => {
           <Button variant="outline-primary" onClick={() => fetchStocks(true)} disabled={loading}>
             {loading ? t('dashboardRefreshing') : t('dashboardRefresh')}
           </Button>
-          <Button variant="primary" onClick={() => navigate('/market-sentiment')}>
-            {t('dashboardSentiment')}
-          </Button>
-          <Button variant="dark" onClick={() => navigate('/ai-chat')}>
-            {t('dashboardAiAssistant')}
+          <Button variant="outline-success" onClick={() => navigate('/investment')}>
+            {isEnglish ? 'Portfolio' : '投资组合'}
           </Button>
         </div>
       </div>
 
-      <Row className="g-3 mb-3">
-        <Col md={3} sm={6}>
-          <Card className="metric-card">
-            <Card.Body>
-              <div className="metric-label">{t('dashboardTotalMarket')}</div>
-              <div className="metric-value">{metrics.totalMarket}</div>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={3} sm={6}>
-          <Card className="metric-card">
-            <Card.Body>
-              <div className="metric-label">{t('dashboardRising')}</div>
-              <div className="metric-value text-success">{metrics.riseCount}</div>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={3} sm={6}>
-          <Card className="metric-card">
-            <Card.Body>
-              <div className="metric-label">{t('dashboardFalling')}</div>
-              <div className="metric-value text-danger">{metrics.dropCount}</div>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={3} sm={6}>
-          <Card className="metric-card">
-            <Card.Body>
-              <div className="metric-label">{t('dashboardAvgChange')}</div>
-              <div className={`metric-value ${getChangeClass(metrics.avgChange)}`}>{formatPercent(metrics.avgChange)}</div>
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
+      <div className="ds-metrics-grid mb-3">
+        <Card className="metric-card hover-card">
+          <Card.Body>
+            <div className="metric-label">{t('dashboardTotalMarket')}</div>
+            <div className="metric-value">{metrics.totalMarket.toLocaleString()}</div>
+          </Card.Body>
+        </Card>
+        <Card className="metric-card hover-card">
+          <Card.Body>
+            <div className="metric-label">{t('dashboardRising')}</div>
+            <div className="metric-value market-up">{metrics.riseCount.toLocaleString()}</div>
+          </Card.Body>
+        </Card>
+        <Card className="metric-card hover-card">
+          <Card.Body>
+            <div className="metric-label">{t('dashboardFalling')}</div>
+            <div className="metric-value market-down">{metrics.dropCount.toLocaleString()}</div>
+          </Card.Body>
+        </Card>
+        <Card className="metric-card hover-card">
+          <Card.Body>
+            <div className="metric-label">{t('dashboardAvgChange')}</div>
+            <div className={`metric-value ${getChangeClass(metrics.avgChange)}`}>{formatPercent(metrics.avgChange)}</div>
+          </Card.Body>
+        </Card>
+      </div>
 
       {dataHealth && sourceHealthRows.length > 0 && (
         <Card className="mb-3">
@@ -358,9 +345,8 @@ const Dashboard = () => {
 
       <Card className="mb-3 dashboard-control-card">
         <Card.Body>
-          <Row className="g-2 align-items-center">
-            <Col lg={5}>
-              <InputGroup>
+          <div className="ds-filter-toolbar">
+            <InputGroup>
                 <InputGroup.Text>{isEnglish ? 'Search' : '搜索'}</InputGroup.Text>
                 <Form.Control
                   value={searchTerm}
@@ -389,33 +375,28 @@ const Dashboard = () => {
                   </InputGroup.Text>
                 )}
               </InputGroup>
-            </Col>
-            <Col lg={4}>
-              <div className="trend-filter-group">
+            <div className="trend-filter-group">
                 <Button size="sm" variant={trendFilter === 'all' ? 'primary' : 'outline-primary'} onClick={() => { setTrendFilter('all'); setPage(1); }}>
                   {isEnglish ? 'All' : '全部'}
                 </Button>
-                <Button size="sm" variant={trendFilter === 'up' ? 'success' : 'outline-success'} onClick={() => { setTrendFilter('up'); setPage(1); }}>
+                <Button size="sm" variant={trendFilter === 'up' ? 'danger' : 'outline-danger'} onClick={() => { setTrendFilter('up'); setPage(1); }}>
                   {isEnglish ? 'Up' : '上涨'}
                 </Button>
-                <Button size="sm" variant={trendFilter === 'down' ? 'danger' : 'outline-danger'} onClick={() => { setTrendFilter('down'); setPage(1); }}>
+                <Button size="sm" variant={trendFilter === 'down' ? 'success' : 'outline-success'} onClick={() => { setTrendFilter('down'); setPage(1); }}>
                   {isEnglish ? 'Down' : '下跌'}
                 </Button>
                 <Button size="sm" variant={trendFilter === 'flat' ? 'secondary' : 'outline-secondary'} onClick={() => { setTrendFilter('flat'); setPage(1); }}>
                   {isEnglish ? 'Flat' : '平盘'}
                 </Button>
-              </div>
-            </Col>
-            <Col lg={3}>
-              <Form.Select value={sortKey} onChange={(e) => { setSortKey(e.target.value); setPage(1); }}>
+            </div>
+            <Form.Select value={sortKey} onChange={(e) => { setSortKey(e.target.value); setPage(1); }}>
                 <option value="change_desc">{isEnglish ? 'Change %: High to Low' : '涨跌幅：从高到低'}</option>
                 <option value="change_asc">{isEnglish ? 'Change %: Low to High' : '涨跌幅：从低到高'}</option>
                 <option value="volume_desc">{isEnglish ? 'Volume: High to Low' : '成交量：从高到低'}</option>
                 <option value="price_desc">{isEnglish ? 'Price: High to Low' : '价格：从高到低'}</option>
                 <option value="price_asc">{isEnglish ? 'Price: Low to High' : '价格：从低到高'}</option>
-              </Form.Select>
-            </Col>
-          </Row>
+            </Form.Select>
+          </div>
         </Card.Body>
       </Card>
 
@@ -439,14 +420,14 @@ const Dashboard = () => {
       )}
 
       {!loading && !error && (
-        <Card>
+        <Card className="dashboard-stock-table">
           <Card.Header className="d-flex justify-content-between align-items-center flex-wrap gap-2">
-            <strong>{isEnglish ? 'Stock List' : '股票列表'}</strong>
+            <strong>{isEnglish ? 'A-Share Market' : 'A股行情'}</strong>
             <div className="d-flex align-items-center gap-2 text-muted small">
               <span>
-                {isEnglish ? 'Showing' : '当前显示'} {transformedStocks.length} / {totalStocks || stocks.length}
+                {transformedStocks.length.toLocaleString()} / {totalStocks ? totalStocks.toLocaleString() : stocks.length.toLocaleString()}
               </span>
-              {lastUpdate && <Badge bg="light" text="dark">{lastUpdate.toLocaleTimeString()}</Badge>}
+              {lastUpdate && <span className="freshness-badge">{lastUpdate.toLocaleTimeString()}</span>}
             </div>
           </Card.Header>
           <Card.Body className="p-0">
@@ -457,35 +438,42 @@ const Dashboard = () => {
                 <table className="table table-hover mb-0">
                   <thead>
                     <tr>
-                      <th>{isEnglish ? 'Symbol' : '代码'}</th>
+                      <th style={{width: '100px'}}>{isEnglish ? 'Symbol' : '代码'}</th>
                       <th>{isEnglish ? 'Name' : '名称'}</th>
-                      <th>{isEnglish ? 'Price' : '价格'}</th>
-                      <th>{isEnglish ? 'Change %' : '涨跌幅'}</th>
-                      <th>{isEnglish ? 'Volume' : '成交量'}</th>
-                      <th>{isEnglish ? 'Market Cap' : '市值'}</th>
-                      <th>{isEnglish ? 'Action' : '操作'}</th>
+                      <th className="text-end">{isEnglish ? 'Price' : '价格'}</th>
+                      <th className="text-end">{isEnglish ? 'Change %' : '涨跌幅'}</th>
+                      <th className="text-end d-none d-md-table-cell">{isEnglish ? 'Volume' : '成交量'}</th>
+                      <th className="text-end d-none d-lg-table-cell">{isEnglish ? 'Market Cap' : '市值'}</th>
+                      <th style={{width: '140px'}}>{isEnglish ? 'Watch' : '关注'}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {pagedStocks.map((stock) => (
-                      <tr key={stock.symbol}>
-                        <td className="fw-semibold">{stock.symbol}</td>
-                        <td>{stock.name}</td>
-                        <td>{formatPrice(stock.price)}</td>
-                        <td>
-                          <span className={getChangeClass(Number(stock.change_percent || 0))}>
+                    {pagedStocks.map((stock) => {
+                      const changeVal = Number(stock.change_percent || 0);
+                      const changeDir = changeVal > 0 ? 'up' : changeVal < 0 ? 'down' : 'flat';
+                      return (
+                      <tr key={stock.symbol} style={{cursor: 'pointer'}} onClick={() => navigate(`/stock/${stock.symbol}`)}>
+                        <td><span className="symbol-cell">{stock.symbol}</span></td>
+                        <td className="text-muted">{stock.name}</td>
+                        <td className="text-end price-cell">{formatPrice(stock.price)}</td>
+                        <td className="text-end">
+                          <span className={`change-badge ${changeDir}`}>
                             {formatPercent(stock.change_percent)}
                           </span>
                         </td>
-                        <td>{Number(stock.volume || 0).toLocaleString()}</td>
-                        <td>{Number(stock.market_cap || 0).toLocaleString()}</td>
-                        <td>
-                          <Button variant="outline-primary" size="sm" onClick={() => navigate(`/stock/${stock.symbol}`)}>
-                            {isEnglish ? 'Details' : '详情'}
-                          </Button>
+                        <td className="text-end num-tabular d-none d-md-table-cell">{Number(stock.volume || 0).toLocaleString()}</td>
+                        <td className="text-end num-tabular d-none d-lg-table-cell">{(Number(stock.market_cap || 0) / 1e8).toFixed(1)}亿</td>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <div className="d-flex flex-nowrap gap-1">
+                            <AddToWatchlistButton
+                              symbol={stock.symbol}
+                              isEnglish={isEnglish}
+                              watchlistApi={watchlistApi}
+                            />
+                          </div>
                         </td>
                       </tr>
-                    ))}
+                    )})}
                   </tbody>
                 </table>
               </div>
@@ -504,7 +492,7 @@ const Dashboard = () => {
           )}
         </Card>
       )}
-    </Container>
+    </div>
   );
 };
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Alert, Badge, Button, Card, Col, Container, Row, Spinner, Table } from 'react-bootstrap';
+import { Alert, Badge, Button, Card, Spinner, Table } from 'react-bootstrap';
 import Plot from 'react-plotly.js';
 import { useAppI18n } from '../i18n';
 import PageLogo from '../components/PageLogo';
@@ -62,30 +62,30 @@ const StockDetail = () => {
 
   const price = Number(stockData?.current_price ?? stockData?.price ?? 0);
   const changePercent = Number(stockData?.change_percent ?? 0);
-  const changeClass = changePercent >= 0 ? 'text-success' : 'text-danger';
+  const changeClass = changePercent > 0 ? 'market-up' : changePercent < 0 ? 'market-down' : 'market-flat';
 
   if (loading) {
     return (
-      <Container className="py-5 text-center stock-detail-page">
+      <div className="analysis-page stock-detail-page py-5 text-center">
         <Spinner animation="border" />
         <p className="mt-3 mb-0">{isEnglish ? 'Loading stock details...' : '正在加载股票详情...'}</p>
-      </Container>
+      </div>
     );
   }
 
   if (error || !stockData) {
     return (
-      <Container className="py-4 stock-detail-page">
+      <div className="analysis-page stock-detail-page py-4">
         <Alert variant="danger">{error || (isEnglish ? 'Stock data not found.' : '未找到股票数据。')}</Alert>
         <Button onClick={() => navigate('/')} variant="primary">
           {isEnglish ? 'Back to Home' : '返回首页'}
         </Button>
-      </Container>
+      </div>
     );
   }
 
   return (
-    <Container className="py-4 stock-detail-page">
+    <div className="analysis-page stock-detail-page">
       <Button variant="outline-secondary" className="mb-3" onClick={() => navigate('/')}>
         {isEnglish ? 'Back to Home' : '返回首页'}
       </Button>
@@ -107,7 +107,7 @@ const StockDetail = () => {
           </div>
         </div>
         <div className="stock-detail-actions">
-          <Button variant="outline-light" onClick={() => navigate(`/predictions?stock=${symbol}`)}>
+          <Button variant="outline-secondary" onClick={() => navigate(`/investment/forecast?stock=${symbol}`)}>
             {isEnglish ? 'Open Forecast' : '查看预测'}
           </Button>
           <Button variant="primary" onClick={() => navigate(`/ai-chat?stock=${symbol}`)}>
@@ -116,8 +116,8 @@ const StockDetail = () => {
         </div>
       </section>
 
-      <Row>
-        <Col lg={8} className="mb-3">
+      <div className="ds-two-col ds-two-col--wide-left stock-detail-grid">
+        <div className="mb-3">
           <Card className="mb-3">
             <Card.Header>{isEnglish ? 'Price Trend' : '价格走势'}</Card.Header>
             <Card.Body>
@@ -133,7 +133,7 @@ const StockDetail = () => {
                       y: chartSource.map((x) => Number(x.close ?? 0)),
                       type: 'scatter',
                       mode: 'lines',
-                      line: { color: '#3b82f6', width: 2 },
+                      line: { color: '#0071e3', width: 2 },
                       name: isEnglish ? 'Close' : '收盘价',
                     },
                   ]}
@@ -222,9 +222,9 @@ const StockDetail = () => {
               )}
             </Card.Body>
           </Card>
-        </Col>
+        </div>
 
-        <Col lg={4} className="mb-3">
+        <div className="mb-3">
           <Card>
             <Card.Header>{isEnglish ? 'Technical Indicators' : '技术指标'}</Card.Header>
             <Card.Body>
@@ -253,9 +253,9 @@ const StockDetail = () => {
               )}
             </Card.Body>
           </Card>
-        </Col>
-      </Row>
-    </Container>
+        </div>
+      </div>
+    </div>
   );
 };
 

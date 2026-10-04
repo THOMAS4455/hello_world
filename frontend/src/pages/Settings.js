@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Button, Card, Col, Container, Form, Row, Spinner } from 'react-bootstrap';
+import { Alert, Button, Card, Form, Spinner } from 'react-bootstrap';
 import { useDispatch } from 'react-redux';
 import { useAppI18n } from '../i18n';
 import stockApiService from '../services/stockApi';
@@ -84,10 +84,9 @@ const Settings = () => {
   };
 
   return (
-    <Container fluid className="py-4">
-      <Row>
-        <Col md={8} className="mx-auto">
-          <Card>
+    <div className="analysis-page settings-page">
+      <div className="ds-page-narrow">
+        <Card>
             <Card.Header as="h4">{isEnglish ? 'System Settings' : '系统设置'}</Card.Header>
             <Card.Body>
               {loading ? (
@@ -164,10 +163,9 @@ const Settings = () => {
                 </>
               )}
             </Card.Body>
-          </Card>
-        </Col>
-      </Row>
-    </Container>
+        </Card>
+      </div>
+    </div>
   );
 };
 

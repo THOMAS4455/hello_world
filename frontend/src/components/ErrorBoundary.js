@@ -38,7 +38,7 @@ class ErrorBoundary extends React.Component {
         body: JSON.stringify({
           error: error.toString(),
           stack: error.stack,
-          componentStack: errorInfo.componentStack,
+          componentStack: errorInfo?.componentStack || '',
           url: window.location.href,
           userAgent: navigator.userAgent,
           timestamp: new Date().toISOString(),
@@ -81,7 +81,7 @@ class ErrorBoundary extends React.Component {
                     {this.state.error && this.state.error.toString()}
                     <br />
                     <br />
-                    {this.state.errorInfo.componentStack}
+                    {this.state.errorInfo?.componentStack || '(no component stack)'}
                   </code>
                 </pre>
               </details>

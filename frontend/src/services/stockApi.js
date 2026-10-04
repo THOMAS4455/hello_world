@@ -197,7 +197,7 @@ class StockApiService {
 
     const response = await this.request('/api/stocks/search', {
       method: 'GET',
-      params: { q: keyword, refresh: true },
+      params: { q: keyword, refresh: false },
     });
     const stocks = Array.isArray(response?.data?.stocks) ? response.data.stocks : [];
     const formattedStocks = stocks.map((stock) => this.normalizeStock(stock));
@@ -235,8 +235,11 @@ class StockApiService {
     const timeoutMs = Number(options.timeoutMs || 190000);
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
+      const params = {};
+      if (options.taskId) params.task_id = options.taskId;
       const response = await this.request('/api/predictions/predict', {
         method: 'POST',
+        params,
         body: JSON.stringify(body),
         signal: controller.signal,
       });
@@ -285,8 +288,11 @@ class StockApiService {
       up_threshold: options.upThreshold ?? options.up_threshold ?? 0.02,
       min_confidence: options.minConfidence ?? options.min_confidence ?? 0,
     };
+    const params = {};
+    if (options.taskId) params.task_id = options.taskId;
     const response = await this.request('/api/predictions/backtest', {
       method: 'POST',
+      params,
       body: JSON.stringify(body),
     });
     return response.data;
@@ -346,28 +352,6 @@ class StockApiService {
     return response.data;
   }
 
-  async getMarketSentiment(symbol = null, options = {}) {
-    const params = {
-      symbol,
-      news_limit: options.newsLimit ?? 20,
-      keyword: options.keyword ?? '',
-      sources: Array.isArray(options.sources) ? options.sources : ['sina', 'akshare'],
-    };
-    const forceRefresh = Boolean(options.forceRefresh);
-    const cacheKey = this.getCacheKey('/api/sentiment/market', params);
-    const cached = this.getCachedData(cacheKey);
-    if (cached && !forceRefresh) {
-      return cached;
-    }
-
-    const response = await this.request('/api/sentiment/market', {
-      method: 'GET',
-      params,
-    });
-    this.setCachedData(cacheKey, response.data || null);
-    return response.data || null;
-  }
-
   async getHealthStatus() {
     return this.request('/health');
   }
@@ -393,6 +377,139 @@ class StockApiService {
       body: JSON.stringify({ settings }),
     });
     return response?.data?.user || null;
+  }
+
+  async getInvestmentWatchlist() {
+    const response = await this.request('/api/investment/watchlist', { method: 'GET' });
+    return response?.data || { symbols: [], config: {} };
+  }
+
+  async updateInvestmentWatchlist(symbols = []) {
+    const response = await this.request('/api/investment/watchlist', {
+      method: 'PUT',
+      body: JSON.stringify({ symbols }),
+    });
+    return response?.data || { symbols: [], config: {} };
+  }
+
+  async updatePortfolioConfig(config = {}) {
+    const response = await this.request('/api/investment/config', {
+      method: 'PUT',
+      body: JSON.stringify({ config }),
+    });
+    return response?.data || config;
+  }
+
+  async runPortfolioBacktest(options = {}) {
+    const body = {
+      symbols: options.symbols,
+      weight_mode: options.weight_mode ?? 'equal',
+      strategy: options.strategy ?? 'default',
+      horizon: options.horizon ?? 5,
+      test_size: options.test_size ?? 0.2,
+      up_threshold: options.up_threshold ?? 0.02,
+      min_confidence: options.min_confidence ?? 0,
+      max_symbols: options.max_symbols ?? 10,
+    };
+    const response = await this.request('/api/investment/portfolio/backtest', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    return response?.data || null;
+  }
+
+  async getPaperAccount() {
+    const response = await this.request('/api/investment/paper/account', { method: 'GET' });
+    return response?.data?.account || null;
+  }
+
+  async createPaperAccount(initialCapital) {
+    const response = await this.request('/api/investment/paper/account', {
+      method: 'POST',
+      body: JSON.stringify({ initial_capital: initialCapital }),
+    });
+    return response?.data?.account || null;
+  }
+
+  async advancePaperDay() {
+    const response = await this.request('/api/investment/paper/advance-day', { method: 'POST' });
+    return response?.data || null;
+  }
+
+  async getPaperEquityCurve() {
+    const response = await this.request('/api/investment/paper/equity-curve', { method: 'GET' });
+    return response?.data || null;
+  }
+
+  async getPaperTrades(limit = 50) {
+    const response = await this.request('/api/investment/paper/trades', {
+      method: 'GET',
+      params: { limit },
+    });
+    return Array.isArray(response?.data?.items) ? response.data.items : [];
+  }
+
+  async getSignalStats(symbol, limit = 50) {
+    const response = await this.request(`/api/investment/signal-stats/${encodeURIComponent(symbol)}`, {
+      method: 'GET',
+      params: { limit },
+    });
+    return response?.data || null;
+  }
+
+  async getDailyBrief() {
+    const response = await this.request('/api/investment/daily-brief', { method: 'GET' });
+    return response?.data || null;
+  }
+
+  async runDailyScreener(options = {}) {
+    const response = await this.request('/api/investment/screener/run', {
+      method: 'POST',
+      body: JSON.stringify({
+        top_n: options.topN ?? 5,
+        capital: options.capital ?? 100000,
+        min_confidence: options.minConfidence ?? 0.55,
+      }),
+    });
+    return response?.data || null;
+  }
+
+  async getDailyPicks() {
+    const response = await this.request('/api/investment/screener/latest', { method: 'GET' });
+    return response?.data || null;
+  }
+
+  async getCandidateResearch(symbols = [], options = {}) {
+    const response = await this.request('/api/investment/research/candidates', {
+      method: 'POST',
+      body: JSON.stringify({ symbols, min_score: options.minScore ?? 0.6, top_n: options.topN ?? 10 }),
+    });
+    return response?.data || null;
+  }
+
+  async getHoldingAdvice(holdings = []) {
+    const response = await this.request('/api/investment/holdings/advice', {
+      method: 'POST', body: JSON.stringify({ holdings }),
+    });
+    return response?.data || null;
+  }
+
+  async getTradingAgentsReview(symbol) {
+    const response = await this.request('/api/investment/trading-agents/review', {
+      method: 'POST', body: JSON.stringify({ symbol }),
+    });
+    return response?.data || null;
+  }
+
+  async getPortfolioConfig() {
+    const response = await this.request('/api/investment/config', { method: 'GET' });
+    return response?.data || {};
+  }
+
+  async getPortfolioReport(cacheKey) {
+    const encoded = encodeURIComponent(cacheKey);
+    const response = await this.request(`/api/investment/portfolio/report/${encoded}`, { method: 'GET' });
+    return response?.data || null;
   }
 
   async batchGetStocks(symbols = []) {

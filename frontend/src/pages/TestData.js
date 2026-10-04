@@ -21,7 +21,7 @@ const TestData = () => {
 
   if (isLoading) {
     return (
-      <div className="text-center p-4">
+      <div className="analysis-page text-center p-4">
         <Spinner animation="border" />
         <p>{isEnglish ? 'Loading...' : '加载中...'}</p>
       </div>
@@ -30,7 +30,7 @@ const TestData = () => {
 
   if (error) {
     return (
-      <div className="p-4">
+      <div className="analysis-page ds-page-narrow p-4">
         <Alert variant="danger">
           <h5>{isEnglish ? 'API Error' : 'API 错误'}</h5>
           <pre>{JSON.stringify(error, null, 2)}</pre>
@@ -41,7 +41,7 @@ const TestData = () => {
   }
 
   return (
-    <div className="p-4">
+    <div className="analysis-page ds-page-narrow p-4">
       <Card>
         <Card.Header>
           <h4>{isEnglish ? 'Data Test Page' : '数据测试页'}</h4>

@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useEffect, useRef } from 'react';
 import { Provider, useDispatch, useSelector } from 'react-redux';
-import { Route, Routes, useLocation } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { PersistGate } from 'redux-persist/integration/react';
 import Navigation from './components/Navigation';
 import RequireAdmin from './components/RequireAdmin';
@@ -8,6 +8,8 @@ import RequireAuth from './components/RequireAuth';
 import ErrorBoundary from './components/ErrorBoundary';
 import LoadingScreen from './components/LoadingScreen';
 import NotificationContainer from './components/NotificationContainer';
+import PredictionTaskBar from './components/PredictionTaskBar';
+import { PredictionTasksProvider } from './contexts/PredictionTasksContext';
 import { useAppI18n } from './i18n';
 import { useRefreshSessionMutation } from './services/apiService';
 import { persistor, store } from './store';
@@ -15,27 +17,55 @@ import { checkTokenExpiry, logout, refreshTokenFailure, refreshTokenStart, refre
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './styles/App.css';
 
-const AIChat = lazy(() => import('./pages/AIChat'));
-const AdminPanel = lazy(() => import('./pages/AdminPanel'));
-const Backtest = lazy(() => import('./pages/Backtest'));
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const Home = lazy(() => import('./pages/Home'));
-const Guide = lazy(() => import('./pages/Guide'));
-const Login = lazy(() => import('./pages/Login'));
-const MarketSentiment = lazy(() => import('./pages/MarketSentiment'));
-const Predictions = lazy(() => import('./pages/Predictions'));
-const Register = lazy(() => import('./pages/Register'));
-const Settings = lazy(() => import('./pages/Settings'));
-const StockDetail = lazy(() => import('./pages/StockDetail'));
-const TestConnection = lazy(() => import('./pages/TestConnection'));
-const TestData = lazy(() => import('./pages/TestData'));
-const UserProfile = lazy(() => import('./pages/UserProfile'));
+const CHUNK_RELOAD_KEY = 'chunk_reload_once';
+
+const lazyWithRetry = (importer, label) =>
+  lazy(async () => {
+    try {
+      return await importer();
+    } catch (error) {
+      const message = String(error?.message || error || '');
+      const isChunkError =
+        error?.name === 'ChunkLoadError' || /Loading chunk .* failed/i.test(message);
+      if (isChunkError && !sessionStorage.getItem(CHUNK_RELOAD_KEY)) {
+        sessionStorage.setItem(CHUNK_RELOAD_KEY, label || 'page');
+        window.location.reload();
+        return new Promise(() => {});
+      }
+      sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+      throw error;
+    }
+  });
+
+const AIChat = lazyWithRetry(() => import('./pages/AIChat'), 'AIChat');
+const AdminPanel = lazyWithRetry(() => import('./pages/AdminPanel'), 'AdminPanel');
+const Backtest = lazyWithRetry(() => import('./pages/Backtest'), 'Backtest');
+const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'), 'Dashboard');
+const Home = lazyWithRetry(() => import('./pages/Home'), 'Home');
+const Guide = lazyWithRetry(() => import('./pages/Guide'), 'Guide');
+const Login = lazyWithRetry(() => import('./pages/Login'), 'Login');
+const Predictions = lazyWithRetry(() => import('./pages/Predictions'), 'Predictions');
+const Register = lazyWithRetry(() => import('./pages/Register'), 'Register');
+const Settings = lazyWithRetry(() => import('./pages/Settings'), 'Settings');
+const StockDetail = lazyWithRetry(() => import('./pages/StockDetail'), 'StockDetail');
+const TestConnection = lazyWithRetry(() => import('./pages/TestConnection'), 'TestConnection');
+const TestData = lazyWithRetry(() => import('./pages/TestData'), 'TestData');
+const TrainingMonitor = lazyWithRetry(() => import('./pages/TrainingMonitor'), 'TrainingMonitor');
+const UserProfile = lazyWithRetry(() => import('./pages/UserProfile'), 'UserProfile');
+const InvestmentLayout = lazyWithRetry(() => import('./layouts/InvestmentLayout'), 'InvestmentLayout');
+const PortfolioPage = lazyWithRetry(() => import('./pages/investment/PortfolioPage'), 'PortfolioPage');
+const ForecastPage = lazyWithRetry(() => import('./pages/investment/ForecastPage'), 'ForecastPage');
+const BacktestPage = lazyWithRetry(() => import('./pages/investment/BacktestPage'), 'BacktestPage');
+const PaperPage = lazyWithRetry(() => import('./pages/investment/PaperPage'), 'PaperPage');
+const InsightsPage = lazyWithRetry(() => import('./pages/investment/InsightsPage'), 'InsightsPage');
+const DailyPicksPage = lazyWithRetry(() => import('./pages/investment/DailyPicksPage'), 'DailyPicksPage');
+const WorkbenchPage = lazyWithRetry(() => import('./pages/investment/WorkbenchPage'), 'WorkbenchPage');
 
 const NotFound = () => {
   const { t } = useAppI18n();
 
   return (
-    <div className="text-center mt-5">
+    <div className="analysis-page text-center mt-5">
       <h2>{t('notFoundTitle', 'Page Not Found')}</h2>
       <p className="text-muted">{t('notFoundDescription', 'Please check the URL and try again.')}</p>
     </div>
@@ -94,86 +124,106 @@ function AppContent() {
   }, [dispatch, isAuthenticated, needsRefresh, refreshSession, refreshToken]);
 
   return (
-    <div className="App">
-      {!isAuthPage && <Navigation />}
+    <PredictionTasksProvider>
+      <div className="App">
+        {!isAuthPage && <Navigation />}
 
-      <main className={`main-content ${isAuthPage ? 'auth-route' : ''}`}>
-        <Suspense fallback={<LoadingScreen />}>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/" element={<Home />} />
-            <Route path="/guide" element={<Guide />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/stock/:symbol" element={<StockDetail />} />
-            <Route
-              path="/predictions"
-              element={
-                <RequireAuth>
-                  <Predictions />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/backtest"
-              element={
-                <RequireAuth>
-                  <Backtest />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/market-sentiment"
-              element={
-                <RequireAuth>
-                  <MarketSentiment />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/ai-chat"
-              element={
-                <RequireAuth>
-                  <AIChat />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/admin"
-              element={
-                <RequireAdmin>
-                  <AdminPanel />
-                </RequireAdmin>
-              }
-            />
-            <Route
-              path="/settings"
-              element={
-                <RequireAuth>
-                  <Settings />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/profile"
-              element={
-                <RequireAuth>
-                  <UserProfile />
-                </RequireAuth>
-              }
-            />
-            <Route path="/simple-stock/:symbol" element={<StockDetail />} />
-            <Route path="/enhanced" element={<Dashboard />} />
-            <Route path="/enterprise" element={<Dashboard />} />
-            <Route path="/test" element={<TestData />} />
-            <Route path="/test-connection" element={<TestConnection />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </Suspense>
-      </main>
+        <main className={`main-content ds-shell ${isAuthPage ? 'auth-route' : ''}`}>
+          <Suspense fallback={<LoadingScreen />}>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/" element={<Home />} />
+              <Route path="/guide" element={<Guide />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/stock/:symbol" element={<StockDetail />} />
+              <Route
+                path="/predictions"
+                element={
+                  <RequireAuth>
+                    <Predictions />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/backtest"
+                element={
+                  <RequireAuth>
+                    <Backtest />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/investment"
+                element={
+                  <RequireAuth>
+                    <InvestmentLayout />
+                  </RequireAuth>
+                }
+              >
+                <Route index element={<Navigate to="workbench" replace />} />
+                <Route path="workbench" element={<WorkbenchPage />} />
+                <Route path="portfolio" element={<PortfolioPage />} />
+                <Route path="forecast" element={<ForecastPage />} />
+                <Route path="backtest" element={<BacktestPage />} />
+                <Route path="paper" element={<PaperPage />} />
+                <Route path="insights" element={<InsightsPage />} />
+                <Route path="screener" element={<DailyPicksPage />} />
+              </Route>
+              <Route
+                path="/ai-chat"
+                element={
+                  <RequireAuth>
+                    <AIChat />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/admin"
+                element={
+                  <RequireAdmin>
+                    <AdminPanel />
+                  </RequireAdmin>
+                }
+              />
+              <Route
+                path="/settings"
+                element={
+                  <RequireAuth>
+                    <Settings />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/profile"
+                element={
+                  <RequireAuth>
+                    <UserProfile />
+                  </RequireAuth>
+                }
+              />
+              <Route path="/simple-stock/:symbol" element={<StockDetail />} />
+              <Route path="/enhanced" element={<Dashboard />} />
+              <Route path="/enterprise" element={<Dashboard />} />
+              <Route path="/test" element={<TestData />} />
+              <Route path="/test-connection" element={<TestConnection />} />
+              <Route
+                path="/training-monitor"
+                element={
+                  <RequireAdmin>
+                    <TrainingMonitor />
+                  </RequireAdmin>
+                }
+              />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
+        </main>
 
-      <NotificationContainer />
-    </div>
+        <NotificationContainer />
+        <PredictionTaskBar />
+      </div>
+    </PredictionTasksProvider>
   );
 }
 

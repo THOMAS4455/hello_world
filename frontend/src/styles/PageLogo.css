@@ -1,50 +1,42 @@
 .page-logo {
   display: inline-flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.65rem;
   min-width: 0;
 }
 
 .page-logo-compact {
-  gap: 0.6rem;
+  gap: 0.5rem;
 }
 
 .page-logo-mark {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: #fff;
-  font-size: 1rem;
-  font-weight: 800;
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.18);
+  font-size: 0.875rem;
+  font-weight: 600;
   flex: 0 0 auto;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: var(--ds-text);
+  border: none;
+  box-shadow: none;
 }
 
 .page-logo-compact .page-logo-mark {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  font-size: 0.95rem;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  font-size: 0.8125rem;
 }
 
-.logo-tone-orange {
-  background: linear-gradient(135deg, #1d4ed8, #60a5fa);
-}
-
-.logo-tone-teal {
-  background: linear-gradient(135deg, #0f766e, #14b8a6);
-}
-
-.logo-tone-blue {
-  background: linear-gradient(135deg, #1e3a8a, #3b82f6);
-}
-
+.logo-tone-orange,
+.logo-tone-teal,
+.logo-tone-blue,
 .logo-tone-rose {
-  background: linear-gradient(135deg, #e11d48, #fb7185);
+  background: var(--ds-text);
 }
 
 .page-logo-text {
@@ -52,31 +44,24 @@
 }
 
 .page-logo-title {
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: var(--ds-subhead-size);
+  font-weight: 600;
   color: inherit;
-  line-height: 1.1;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
 }
 
 .page-logo-subtitle {
-  margin-top: 3px;
-  font-size: 0.75rem;
-  color: #94a3b8;
-  line-height: 1.2;
+  margin-top: 2px;
+  font-size: var(--ds-caption-size);
+  color: var(--ds-text-tertiary);
+  line-height: 1.3;
 }
 
 .page-logo-compact .page-logo-title {
-  font-size: 0.95rem;
+  font-size: 1.0625rem;
 }
 
-@media (max-width: 1200px) {
-  .page-logo-compact .page-logo-subtitle {
-    display: none;
-  }
-}
-
-@media (max-width: 768px) {
-  .page-logo-title {
-    font-size: 0.94rem;
-  }
+.main-navbar .page-logo-subtitle {
+  display: none;
 }

@@ -1,33 +1,38 @@
 .decision-card {
-  border: 1px solid #dbe3ee;
-  border-radius: 18px;
-  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.06);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-lg);
+  box-shadow: var(--ds-shadow-sm);
   overflow: hidden;
+  background: var(--ds-bg-elevated);
 }
 
 .decision-card .card-header {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0)),
-    linear-gradient(135deg, #06090f 0%, #0f172a 55%, #111827 100%);
-  color: #f8fafc;
-  font-weight: 700;
-  padding: 16px 18px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  background: transparent;
+  color: var(--ds-text);
+  font-weight: 600;
+  font-size: 1rem;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--ds-border);
 }
 
 .decision-card .card-body {
-  padding: 20px;
+  padding: 22px;
 }
 
 .decision-summary {
-  color: #334155;
-  line-height: 1.75;
+  color: var(--ds-text-secondary);
+  line-height: 1.55;
+  font-size: 0.9375rem;
 }
 
 .decision-confidence .progress {
-  height: 10px;
-  border-radius: 999px;
-  background: #eaf1fb;
+  height: 6px;
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-bg-subtle);
+}
+
+.decision-confidence .progress-bar {
+  background: var(--ds-accent);
 }
 
 .decision-evidence {
@@ -37,26 +42,23 @@
 }
 
 .decision-evidence-item {
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 10px 12px;
-  background: #f8fafc;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+  padding: 12px 14px;
+  background: var(--ds-bg-muted);
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  color: #64748b;
-}
-
-.decision-evidence-item strong {
-  color: #0f172a;
+  gap: 8px;
+  font-size: 0.875rem;
 }
 
 .decision-risk {
-  border: 1px solid #fde68a;
-  background: #fffbeb;
-  color: #92400e;
-  border-radius: 12px;
-  padding: 10px 12px;
+  padding: 12px 14px;
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-bg-muted);
+  color: var(--ds-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.5;
 }
 
 @media (max-width: 768px) {

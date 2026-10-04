@@ -98,7 +98,7 @@ const StockTable = ({ stocks, loading, onViewDetail, onAnalyze }) => {
           <tbody>
             {paginatedStocks.map((stock, index) => {
               const isPositive = stock.change >= 0;
-              const changeColor = isPositive ? 'success' : 'danger';
+              const badgeClass = isPositive ? 'bg-market-up' : 'bg-market-down';
 
               return (
                 <tr key={stock.symbol || index} className="stock-row">
@@ -110,14 +110,14 @@ const StockTable = ({ stocks, loading, onViewDetail, onAnalyze }) => {
                     <span className="fw-bold">¥{stock.price.toFixed(2)}</span>
                   </td>
                   <td>
-                    <Badge bg={changeColor} className="d-inline-flex align-items-center">
+                    <Badge className={`d-inline-flex align-items-center ${badgeClass}`}>
                       {isPositive ? <ArrowUp size={10} className="me-1" /> : <ArrowDown size={10} className="me-1" />}
                       {isPositive ? '+' : ''}
                       {stock.change.toFixed(2)}
                     </Badge>
                   </td>
                   <td>
-                    <Badge bg={changeColor} className="d-inline-flex align-items-center">
+                    <Badge className={`d-inline-flex align-items-center ${badgeClass}`}>
                       {isPositive ? <GraphUp size={10} className="me-1" /> : <GraphDown size={10} className="me-1" />}
                       {isPositive ? '+' : ''}
                       {stock.change_percent.toFixed(2)}%

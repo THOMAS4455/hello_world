@@ -1,0 +1,241 @@
+.task-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1050;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: saturate(180%) blur(24px);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  border-top: 1px solid var(--ds-border);
+  padding: 6px 22px;
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.22, 0.1, 0.15, 1), padding 0.25s ease;
+  pointer-events: none;
+}
+
+.task-bar--visible {
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.task-bar--expanded {
+  padding: 10px 22px;
+}
+
+.task-bar-inner {
+  max-width: var(--ds-page-max);
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.task-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--ds-radius-pill);
+  font-size: var(--ds-caption-size);
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--ds-border);
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  background: var(--ds-bg-elevated);
+  color: var(--ds-text-secondary);
+}
+
+.task-chip:hover {
+  border-color: var(--ds-border-strong);
+  box-shadow: var(--ds-shadow-sm);
+}
+
+.task-chip--running {
+  border-color: rgba(0, 102, 204, 0.2);
+  background: var(--ds-accent-soft);
+  color: var(--ds-accent);
+}
+
+.task-chip--running:hover {
+  border-color: var(--ds-accent);
+}
+
+.task-chip--wide {
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0;
+  overflow: hidden;
+  cursor: default;
+  min-width: 200px;
+  max-width: 340px;
+}
+
+.task-chip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  flex: 1;
+}
+
+.task-chip--done {
+  background: var(--ds-bg-muted);
+}
+
+.task-chip--unseen {
+  border-color: rgba(48, 164, 108, 0.4);
+  background: var(--ds-market-down-bg);
+}
+
+.task-chip-spinner {
+  width: 12px;
+  height: 12px;
+  border-width: 2px;
+  flex-shrink: 0;
+}
+
+.task-chip-type {
+  font-weight: 600;
+  color: var(--ds-text);
+}
+
+.task-chip-symbol {
+  color: var(--ds-text-secondary);
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+}
+
+.task-chip-pct {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--ds-accent);
+  min-width: 28px;
+  text-align: right;
+}
+
+.task-chip-stage {
+  font-size: 0.7rem;
+  color: var(--ds-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+.task-chip-progress-wrap {
+  flex: 1;
+  min-width: 40px;
+  max-width: 80px;
+}
+
+.task-chip-progress {
+  height: 3px;
+  border-radius: 2px;
+}
+
+.task-chip-progress .progress-bar {
+  background: var(--ds-accent);
+  transition: width 0.3s ease;
+}
+
+.task-chip-cancel {
+  width: 100%;
+  padding: 2px 0;
+  border: none;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  background: transparent;
+  color: var(--ds-text-tertiary);
+  font-size: 0.65rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.task-chip-cancel:hover {
+  background: rgba(229, 72, 77, 0.06);
+  color: var(--ds-market-up);
+}
+
+.task-chip-badge {
+  font-size: 0.65rem;
+  padding: 1px 5px;
+}
+
+.task-chip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ds-accent);
+  animation: task-dot-pulse 1.2s infinite;
+}
+
+@keyframes task-dot-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.task-chip-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.task-chip-close {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--ds-text-tertiary);
+  font-size: 0.9rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  transition: all 0.15s ease;
+}
+
+.task-chip-close:hover {
+  background: var(--ds-bg-subtle);
+  color: var(--ds-text);
+}
+
+.task-bar-count {
+  font-size: 0.65rem;
+  font-weight: 500;
+  padding: 2px 8px;
+  margin-left: auto;
+}
+
+@media (max-width: 768px) {
+  .task-bar {
+    padding: 6px 10px;
+  }
+
+  .task-bar--expanded {
+    padding: 8px 10px 48px;
+  }
+
+  .task-chip--wide {
+    min-width: 160px;
+    max-width: 100%;
+  }
+
+  .task-chip {
+    padding: 3px 8px;
+    font-size: 0.72rem;
+    gap: 4px;
+  }
+
+  .task-chip-row {
+    padding: 4px 8px;
+    gap: 4px;
+  }
+}

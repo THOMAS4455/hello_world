@@ -15,12 +15,8 @@ const LoadingScreen = ({ message, showLogo = true }) => {
             {showLogo && (
               <div className="mb-4">
                 <div className="logo-container">
-                  <div className="logo-icon">
-                    <i className="bi bi-graph-up-arrow"></i>
-                  </div>
-                  <h1 className="logo-text">
-                    {isEnglish ? 'Stock Prediction System' : '股票预测系统'}
-                  </h1>
+                  <div className="logo-icon" aria-hidden>A</div>
+                  <h1 className="logo-text">AlphaScope</h1>
                 </div>
               </div>
             )}

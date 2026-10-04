@@ -154,7 +154,7 @@ const Guide = () => {
                         <li key={line}>{line}</li>
                       ))}
                     </ul>
-                    <Button variant="outline-light" className="mt-3" onClick={() => navigate('/predictions')}>
+                    <Button variant="outline-secondary" className="mt-3" onClick={() => navigate('/investment/forecast')}>
                       {language === 'en-US' ? 'Try a forecast' : '去试一次预测'}
                     </Button>
                   </Card.Body>

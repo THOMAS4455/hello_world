@@ -28,20 +28,20 @@ export const guideContent = {
         {
           title: '3. 生成预测（需登录）',
           body: '在「智能预测」选择股票、预测窗口（horizon）和上涨阈值（up_threshold），点击生成。你会得到方向、置信度、各子模型意见与文字解释。',
-          path: '/predictions',
+          path: '/investment/forecast',
           pathLabel: '打开智能预测',
         },
         {
           title: '4. 回测验证（需登录）',
           body: '在「回测评估」用历史数据检验信号质量，查看准确率、相对基准的提升与 walk-forward 结果。用来判断策略是否稳定，而不是只看一次预测。',
-          path: '/backtest',
+          path: '/investment/backtest',
           pathLabel: '打开回测评估',
         },
         {
-          title: '5. 结合情绪与 AI（需登录）',
-          body: '「情绪分析」从新闻与市场广度给出情绪分数；「AI 研判」可追问逻辑与风险。把结构化信号与自然语言解释结合，再自己做决策。',
-          path: '/market-sentiment',
-          pathLabel: '查看情绪分析',
+          title: '5. AI 研判（需登录）',
+          body: '用自然语言追问趋势、风险与策略思路，把结构化信号与自然语言解释结合，再自己做决策。',
+          path: '/ai-chat',
+          pathLabel: '打开 AI 研判',
         },
       ],
       tips: [
@@ -73,7 +73,7 @@ export const guideContent = {
         },
         {
           name: '智能预测',
-          path: '/predictions',
+          path: '/investment/forecast',
           needAuth: true,
           summary: '对单只股票给出未来 N 日涨跌方向、置信度与多模型分解结果。',
           how: [
@@ -85,7 +85,7 @@ export const guideContent = {
         },
         {
           name: '回测评估',
-          path: '/backtest',
+          path: '/investment/backtest',
           needAuth: true,
           summary: '在历史区间上模拟信号表现，对比基准准确率。',
           how: [
@@ -93,13 +93,6 @@ export const guideContent = {
             '查看 walk-forward、特征重要性与历史 run 记录',
             '关注 improvement 是否为正、样本数是否足够',
           ],
-        },
-        {
-          name: '情绪分析',
-          path: '/market-sentiment',
-          needAuth: true,
-          summary: '综合新闻标题情感、市场广度（上涨/下跌家数）与可选个股上下文。',
-          how: ['可指定 symbol 或关键词', '阅读 AI 生成的中文摘要', '与预测方向交叉验证'],
         },
         {
           name: 'AI 研判',
@@ -219,20 +212,20 @@ export const guideContent = {
         {
           title: '3. Run a forecast (login required)',
           body: 'In Forecasts, choose symbol, horizon, and up_threshold, then generate. You get direction, confidence, per-model votes, and an explanation block.',
-          path: '/predictions',
+          path: '/investment/forecast',
           pathLabel: 'Open Forecasts',
         },
         {
           title: '4. Backtest (login required)',
           body: 'In Backtests, validate signal quality on history: accuracy, lift vs baseline, walk-forward metrics. Use this to judge stability, not a one-off forecast.',
-          path: '/backtest',
+          path: '/investment/backtest',
           pathLabel: 'Open Backtests',
         },
         {
-          title: '5. Add sentiment & AI (login required)',
-          body: 'Sentiment merges news tone and market breadth; AI Chat helps you ask why in plain language. Combine structured signals with narrative checks before deciding.',
-          path: '/market-sentiment',
-          pathLabel: 'Open Sentiment',
+          title: '5. Add AI insights (login required)',
+          body: 'AI Chat helps you ask why in plain language, combining structured signals with narrative checks before deciding.',
+          path: '/ai-chat',
+          pathLabel: 'Open AI Insights',
         },
       ],
       tips: [
@@ -264,7 +257,7 @@ export const guideContent = {
         },
         {
           name: 'Forecasts',
-          path: '/predictions',
+          path: '/investment/forecast',
           needAuth: true,
           summary: 'Direction, confidence, and multi-model breakdown for one symbol.',
           how: [
@@ -276,7 +269,7 @@ export const guideContent = {
         },
         {
           name: 'Backtests',
-          path: '/backtest',
+          path: '/investment/backtest',
           needAuth: true,
           summary: 'Historical simulation vs a baseline accuracy.',
           how: [
@@ -284,13 +277,6 @@ export const guideContent = {
             'Inspect walk-forward, feature importance, saved runs',
             'Check whether improvement is positive and samples are sufficient',
           ],
-        },
-        {
-          name: 'Sentiment',
-          path: '/market-sentiment',
-          needAuth: true,
-          summary: 'News tone, market breadth, optional symbol context, AI summary.',
-          how: ['Optional symbol or keyword', 'Read the AI narrative', 'Cross-check with forecast direction'],
         },
         {
           name: 'AI Insights',

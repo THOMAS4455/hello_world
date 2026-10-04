@@ -2,12 +2,14 @@ import React from 'react';
 import { Card, Badge, Button, Row, Col } from 'react-bootstrap';
 import { ArrowUp, ArrowDown, GraphUp, GraphDown } from 'react-bootstrap-icons';
 import { useAppI18n } from '../i18n';
+import { getMarketBadgeClass, getMarketChangeClass } from '../utils/stockUtils';
 
 const StockCard = ({ stock, onViewDetail, onAnalyze }) => {
   const { language } = useAppI18n();
   const isEnglish = language === 'en-US';
   const isPositive = stock.change >= 0;
-  const changeColor = isPositive ? 'success' : 'danger';
+  const changeClass = getMarketChangeClass(stock.change);
+  const badgeClass = getMarketBadgeClass(stock.change);
   const TrendIcon = isPositive ? GraphUp : GraphDown;
   const ArrowIcon = isPositive ? ArrowUp : ArrowDown;
 
@@ -18,7 +20,7 @@ const StockCard = ({ stock, onViewDetail, onAnalyze }) => {
           <h6 className="mb-0">{stock.symbol}</h6>
           <small className="text-muted">{stock.name}</small>
         </div>
-        <Badge bg={changeColor} className="d-flex align-items-center">
+        <Badge bg={badgeClass} className="d-flex align-items-center">
           <ArrowIcon className="me-1" size={12} />
           {isPositive ? '+' : ''}
           {stock.change_percent.toFixed(2)}%
@@ -29,7 +31,7 @@ const StockCard = ({ stock, onViewDetail, onAnalyze }) => {
         <Row className="text-center">
           <Col>
             <h4 className="mb-1">¥{stock.price.toFixed(2)}</h4>
-            <small className={`text-${changeColor}`}>
+            <small className={changeClass}>
               {isPositive ? '+' : ''}
               {stock.change.toFixed(2)}
             </small>
@@ -41,7 +43,7 @@ const StockCard = ({ stock, onViewDetail, onAnalyze }) => {
             {isEnglish ? 'Volume: ' : '成交量: '}
             {stock.volume.toLocaleString()}
           </small>
-          <TrendIcon className={`text-${changeColor}`} size={20} />
+          <TrendIcon className={changeClass} size={20} />
         </div>
       </Card.Body>
 

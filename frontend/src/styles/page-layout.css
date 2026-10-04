@@ -1,0 +1,144 @@
+/**
+ * Shared page layout primitives — used across all workspace pages.
+ */
+
+.ds-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ds-metrics-grid--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ds-metrics-grid--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ds-inline-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ds-inline-grid--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ds-params-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 12px 16px;
+  align-items: end;
+}
+
+.ds-param-span-12 { grid-column: span 12; }
+.ds-param-span-6 { grid-column: span 6; }
+.ds-param-span-5 { grid-column: span 5; }
+.ds-param-span-4 { grid-column: span 4; }
+.ds-param-span-3 { grid-column: span 3; }
+.ds-param-span-2 { grid-column: span 2; }
+
+.ds-param-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.ds-params-grid--auto {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px 16px;
+  align-items: end;
+}
+
+.ds-filter-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) auto minmax(160px, 0.7fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.ds-filter-toolbar--2col {
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.45fr);
+}
+
+.ds-two-col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.ds-two-col--wide-left {
+  grid-template-columns: minmax(0, 1.65fr) minmax(260px, 1fr);
+}
+
+.ds-page-narrow {
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+}
+
+.ds-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 24px;
+  align-items: end;
+  margin-bottom: var(--ds-section-gap);
+}
+
+.ds-hero-grid--stats {
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 260px);
+}
+
+@media (max-width: 992px) {
+  .ds-metrics-grid,
+  .ds-inline-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ds-metrics-grid--3,
+  .ds-inline-grid--3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ds-params-grid > [class*='ds-param-span-'] {
+    grid-column: span 6;
+  }
+
+  .ds-params-grid > .ds-param-span-12,
+  .ds-params-grid > .ds-param-actions {
+    grid-column: span 12;
+  }
+
+  .ds-filter-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .ds-two-col {
+    grid-template-columns: 1fr;
+  }
+
+  .ds-hero-grid,
+  .ds-hero-grid--stats {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+}
+
+@media (max-width: 575px) {
+  .ds-metrics-grid,
+  .ds-metrics-grid--2,
+  .ds-metrics-grid--3,
+  .ds-inline-grid,
+  .ds-inline-grid--3 {
+    grid-template-columns: 1fr;
+  }
+
+  .ds-params-grid > [class*='ds-param-span-'] {
+    grid-column: span 12;
+  }
+}

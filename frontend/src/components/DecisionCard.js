@@ -18,9 +18,9 @@ const DecisionCard = ({
   const isEnglish = language === 'en-US';
 
   const toneMap = {
-    bullish: { badge: 'success', text: isEnglish ? 'Bullish' : '偏多' },
-    bearish: { badge: 'danger', text: isEnglish ? 'Bearish' : '偏空' },
-    neutral: { badge: 'secondary', text: isEnglish ? 'Neutral' : '中性' },
+    bullish: { className: 'bg-market-up', text: isEnglish ? 'Bullish' : '偏多' },
+    bearish: { className: 'bg-market-down', text: isEnglish ? 'Bearish' : '偏空' },
+    neutral: { className: 'bg-secondary', text: isEnglish ? 'Neutral' : '中性' },
   };
 
   const qualityMap = {
@@ -38,7 +38,7 @@ const DecisionCard = ({
       <Card.Header className="d-flex justify-content-between align-items-center">
         <span>{title || (isEnglish ? 'Unified Decision Summary' : '统一决策结论')}</span>
         <div className="d-flex gap-2">
-          <Badge bg={tone.badge}>{tone.text}</Badge>
+          <Badge className={tone.className}>{tone.text}</Badge>
           <Badge bg={qualityInfo.badge}>{qualityInfo.text}</Badge>
         </div>
       </Card.Header>

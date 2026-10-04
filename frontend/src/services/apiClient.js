@@ -20,6 +20,17 @@ export const buildQuery = (params = {}) => {
 
 export const getAuthHeaders = () => {
   try {
+    // Prefer live Redux state (persist may lag right after login).
+    const { default: store } = require('../store');
+    const liveToken = store.getState()?.auth?.token;
+    if (liveToken) {
+      return { Authorization: `Bearer ${liveToken}` };
+    }
+  } catch {
+    // store not ready yet
+  }
+
+  try {
     const raw = localStorage.getItem('persist:root');
     if (!raw) {
       return {};

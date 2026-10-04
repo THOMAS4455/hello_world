@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Spinner, Alert, Form, Row, Col, Card } from 'react-bootstrap';
+import { Table, Spinner, Alert, Form, Card } from 'react-bootstrap';
 import { useAppI18n } from '../i18n';
-import { enhancedStockService } from '../services/enhancedStockService';
+import stockApiService from '../services/stockApi';
 
 const StockList = () => {
   const { language } = useAppI18n();
@@ -16,7 +16,7 @@ const StockList = () => {
     const fetchStocks = async () => {
       try {
         setLoading(true);
-        const data = await enhancedStockService.stocks.getMarketOverview();
+        const data = await stockApiService.getMarketOverview();
         let stocksArray = [];
         if (data && data.success && data.data && Array.isArray(data.data.stocks)) {
           stocksArray = data.data.stocks;
@@ -50,43 +50,45 @@ const StockList = () => {
 
   if (loading) {
     return (
-      <div className="loading-spinner">
-        <Spinner animation="border" role="status">
-          <span className="visually-hidden">{isEnglish ? 'Loading...' : '加载中...'}</span>
-        </Spinner>
+      <div className="analysis-page stock-list-page">
+        <div className="loading-spinner text-center py-5">
+          <Spinner animation="border" role="status">
+            <span className="visually-hidden">{isEnglish ? 'Loading...' : '加载中...'}</span>
+          </Spinner>
+        </div>
       </div>
     );
   }
 
   if (error) {
-    return <Alert variant="danger">{error}</Alert>;
+    return (
+      <div className="analysis-page stock-list-page">
+        <Alert variant="danger">{error}</Alert>
+      </div>
+    );
   }
 
   return (
-    <div>
+    <div className="analysis-page stock-list-page">
       <h1 className="mb-4">{isEnglish ? 'Stock List' : '股票列表'}</h1>
 
       <Card className="mb-4">
         <Card.Body>
-          <Row>
-            <Col md={6}>
-              <Form.Group>
-                <Form.Control
-                  type="text"
-                  placeholder={isEnglish ? 'Search stocks...' : '搜索股票...'}
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </Form.Group>
-            </Col>
-            <Col md={4}>
-              <Form.Select value={filter} onChange={(e) => setFilter(e.target.value)}>
-                <option value="all">{isEnglish ? 'All Stocks' : '全部股票'}</option>
-                <option value="positive">{isEnglish ? 'Positive Prediction' : '正向预测'}</option>
-                <option value="negative">{isEnglish ? 'Negative Prediction' : '负向预测'}</option>
-              </Form.Select>
-            </Col>
-          </Row>
+          <div className="ds-filter-toolbar ds-filter-toolbar--2col">
+            <Form.Group className="mb-0">
+              <Form.Control
+                type="text"
+                placeholder={isEnglish ? 'Search stocks...' : '搜索股票...'}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </Form.Group>
+            <Form.Select value={filter} onChange={(e) => setFilter(e.target.value)}>
+              <option value="all">{isEnglish ? 'All Stocks' : '全部股票'}</option>
+              <option value="positive">{isEnglish ? 'Positive Prediction' : '正向预测'}</option>
+              <option value="negative">{isEnglish ? 'Negative Prediction' : '负向预测'}</option>
+            </Form.Select>
+          </div>
         </Card.Body>
       </Card>
 
@@ -115,7 +117,7 @@ const StockList = () => {
                   <td><strong>{stock.symbol || 'N/A'}</strong></td>
                   <td>{stock.name || 'N/A'}</td>
                   <td>¥{(stock.current_price || 0).toFixed(2)}</td>
-                  <td className={(stock.change_percent || 0) >= 0 ? 'text-success' : 'text-danger'}>
+                  <td className={(stock.change_percent || 0) > 0 ? 'market-up' : (stock.change_percent || 0) < 0 ? 'market-down' : 'market-flat'}>
                     {(stock.change_percent || 0) >= 0 ? '+' : ''}
                     {(stock.change_percent || 0).toFixed(2)}%
                   </td>
@@ -123,7 +125,7 @@ const StockList = () => {
                   <td className={stock.prediction > 0.5 ? 'prediction-positive' : 'prediction-negative'}>
                     {stock.prediction ? `${(stock.prediction * 100).toFixed(1)}%` : 'N/A'}
                   </td>
-                  <td className={stock.sentiment > 0 ? 'text-success' : 'text-danger'}>
+                  <td className={stock.sentiment > 0 ? 'market-up' : stock.sentiment < 0 ? 'market-down' : 'market-flat'}>
                     {stock.sentiment ? stock.sentiment.toFixed(3) : 'N/A'}
                   </td>
                   <td className={stock.rsi > 70 ? 'text-danger' : stock.rsi < 30 ? 'text-success' : ''}>

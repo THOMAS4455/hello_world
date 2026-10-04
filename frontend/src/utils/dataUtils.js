@@ -122,8 +122,11 @@ export const formatPercent = (percent) => {
  * @returns {string} CSS类名
  */
 export const getChangeClass = (value) => {
-  if (typeof value !== 'number') {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
     return '';
   }
-  return value >= 0 ? 'prediction-positive' : 'prediction-negative';
+  if (value === 0) {
+    return 'market-flat';
+  }
+  return value > 0 ? 'market-up' : 'market-down';
 };

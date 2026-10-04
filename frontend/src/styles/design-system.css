@@ -1,0 +1,66 @@
+/**
+ * AlphaScope design system
+ */
+:root {
+  --ds-font: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue',
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+
+  --ds-bg: #f3f3f7;
+  --ds-bg-elevated: #ffffff;
+  --ds-bg-muted: #fafafc;
+  --ds-bg-subtle: #f0f0f5;
+  --ds-bg-hover: #eaeaef;
+
+  --ds-text: #1d1d1f;
+  --ds-text-secondary: #6e6e73;
+  --ds-text-tertiary: #9a9aa0;
+
+  --ds-accent: #0066cc;
+  --ds-accent-hover: #0077ed;
+  --ds-accent-soft: #e3f0ff;
+
+  --ds-border: rgba(0, 0, 0, 0.06);
+  --ds-border-strong: rgba(0, 0, 0, 0.10);
+
+  --ds-radius-sm: 10px;
+  --ds-radius-md: 14px;
+  --ds-radius-lg: 18px;
+  --ds-radius-xl: 24px;
+  --ds-radius-pill: 980px;
+
+  --ds-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --ds-shadow-md: 0 4px 24px rgba(0, 0, 0, 0.06);
+  --ds-shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.08);
+  --ds-shadow-card: 0 1px 1px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.04);
+
+  --ds-nav-height: 52px;
+  --ds-page-max: 1120px;
+  --ds-section-gap: 32px;
+
+  --ds-body-size: 17px;
+  --ds-body-line: 1.47059;
+  --ds-caption-size: 0.8125rem;
+  --ds-subhead-size: 0.9375rem;
+  --ds-title-3: 1.25rem;
+  --ds-title-2: clamp(1.5rem, 2.8vw, 2rem);
+  --ds-title-1: clamp(2rem, 4vw, 2.75rem);
+
+  --ds-market-up: #e5484d;
+  --ds-market-up-bg: #fef2f2;
+  --ds-market-down: #30a46c;
+  --ds-market-down-bg: #f0faf4;
+
+  /* Legacy aliases */
+  --bg-main: var(--ds-bg);
+  --bg-panel: var(--ds-bg-elevated);
+  --bg-surface: var(--ds-bg-elevated);
+  --text-dark: var(--ds-text);
+  --text-muted: var(--ds-text-secondary);
+  --text-subtle: var(--ds-text-tertiary);
+  --card-border: var(--ds-border);
+  --card-bg: var(--ds-bg-elevated);
+  --primary: var(--ds-accent);
+  --primary-hover: var(--ds-accent-hover);
+  --primary-soft: var(--ds-accent-soft);
+  --shadow-soft: var(--ds-shadow-md);
+}

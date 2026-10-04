@@ -21,16 +21,49 @@ export const formatPrice = (price, decimals = 2) => {
  * @param {number} changePercent - 涨跌幅
  * @returns {object} 格式化后的涨跌信息
  */
+/** A-share convention: up = red, down = green */
+export const MARKET_UP_COLOR = '#e5484d';
+export const MARKET_DOWN_COLOR = '#30a46c';
+
+export const isMarketUp = (value) => Number(value) > 0;
+export const isMarketDown = (value) => Number(value) < 0;
+
+export const getMarketChangeClass = (value = 0) => {
+  const num = Number(value);
+  if (Number.isNaN(num) || num === 0) {
+    return 'market-flat';
+  }
+  return num > 0 ? 'market-up' : 'market-down';
+};
+
+export const getMarketBadgeClass = (value = 0) => {
+  const num = Number(value);
+  if (Number.isNaN(num) || num === 0) {
+    return 'bg-secondary';
+  }
+  return num > 0 ? 'bg-market-up' : 'bg-market-down';
+};
+
+export const getMarketDirectionBadge = (direction) => {
+  if (direction === 'up' || direction === 'bullish' || direction === 1 || direction === '1') {
+    return 'bg-market-up';
+  }
+  if (direction === 'down' || direction === 'bearish' || direction === 0 || direction === '0') {
+    return 'bg-market-down';
+  }
+  return 'bg-secondary';
+};
+
 export const formatChange = (change, changePercent) => {
   const isPositive = change >= 0;
   const sign = isPositive ? '+' : '';
-  
+
   return {
     change: `${sign}${change.toFixed(2)}`,
     changePercent: `${sign}${changePercent.toFixed(2)}%`,
     isPositive,
-    color: isPositive ? 'success' : 'danger',
-    sign
+    color: getMarketChangeClass(change),
+    sign,
   };
 };
 
@@ -83,7 +116,7 @@ export const getStockColor = (stock) => {
   if (!stock || typeof stock.change !== 'number') {
     return 'secondary';
   }
-  return stock.change >= 0 ? 'success' : 'danger';
+  return getMarketBadgeClass(stock.change);
 };
 
 /**
@@ -354,4 +387,19 @@ export const throttle = (func, delay) => {
       return func.apply(this, args);
     }
   };
+};
+
+/**
+ * Normalize A-share symbol to a 6-digit code (e.g. sz000001 -> 000001).
+ * @param {string} raw
+ * @returns {string|null}
+ */
+export const normalizeAshareSymbol = (raw) => {
+  const text = String(raw || '').trim().toUpperCase();
+  if (!text) {
+    return null;
+  }
+  const stripped = text.replace(/^(SH|SZ|BJ)/i, '').replace(/\.(SH|SZ|BJ)$/i, '');
+  const match = stripped.match(/\d{6}/);
+  return match ? match[0] : null;
 };

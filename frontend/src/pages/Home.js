@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Badge, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
+import { Badge, Button, Card, Form, Spinner } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import { useAppI18n } from '../i18n';
 import PageLogo from '../components/PageLogo';
@@ -23,16 +23,12 @@ const Home = () => {
     () =>
       isEnglish
         ? [
-            { title: 'Forecasts', desc: 'Direction, confidence, and AI reasoning in one view.', path: '/predictions' },
-            { title: 'Backtests', desc: 'Validate signal quality against historical windows.', path: '/backtest' },
-            { title: 'Sentiment', desc: 'Track headline pressure and market breadth quickly.', path: '/market-sentiment' },
-            { title: 'AI Insights', desc: 'Ask for plain-language explanations before a trade.', path: '/ai-chat' },
+            { title: 'Investment Research', desc: 'Watchlist, forecasts, backtests, portfolio simulation, and paper trading in one workspace.', path: '/investment' },
+            { title: 'Market Overview', desc: 'Browse stocks, filters, and data source health at a glance.', path: '/dashboard' },
           ]
         : [
-            { title: '智能预测', desc: '在同一视图中查看方向、置信度和 AI 解释。', path: '/predictions' },
-            { title: '回测评估', desc: '用历史窗口验证信号质量与策略稳定性。', path: '/backtest' },
-            { title: '市场情绪', desc: '快速观察新闻压力与市场广度的变化。', path: '/market-sentiment' },
-            { title: 'AI 研判', desc: '下单前先获取自然语言解释和风险提示。', path: '/ai-chat' },
+            { title: '投资研究', desc: '自选池、单股预测、回测验证、组合回测与模拟盘，一体化研究工作台。', path: '/investment' },
+            { title: '市场总览', desc: '浏览股票列表、涨跌筛选与数据源健康状态。', path: '/dashboard' },
           ],
     [isEnglish]
   );
@@ -98,8 +94,10 @@ const Home = () => {
             glyph="S"
             tone="blue"
           />
-          <Badge>Market Research Desk</Badge>
-          <h1>{isEnglish ? 'A focused workspace for pre-trade research.' : '面向交易前研究的专注工作台。'}</h1>
+          <span className="analysis-workspace-tag">
+            {isEnglish ? 'Research' : '研究工作台'}
+          </span>
+          <h1>{isEnglish ? 'Pre-trade research, simplified.' : '交易前研究，化繁为简。'}</h1>
           <p>
             {isEnglish
               ? 'Track realtime financial headlines, move into forecasts and backtests, and keep attention on the decision instead of the interface.'
@@ -109,10 +107,10 @@ const Home = () => {
             <Button onClick={() => navigate('/dashboard')}>
               {isEnglish ? 'Open Market Overview' : '进入市场总览'}
             </Button>
-            <Button variant="outline-primary" onClick={() => navigate('/predictions')}>
-              {isEnglish ? 'Run Forecasts' : '进入预测模块'}
+            <Button variant="outline-primary" onClick={() => navigate('/investment')}>
+              {isEnglish ? 'Open Research Hub' : '进入投资研究'}
             </Button>
-            <Button variant="outline-light" onClick={() => navigate('/guide')}>
+            <Button variant="outline-secondary" onClick={() => navigate('/guide')}>
               {isEnglish ? 'User Guide' : '使用指南'}
             </Button>
           </div>
@@ -134,18 +132,16 @@ const Home = () => {
         </div>
       </section>
 
-      <Row className="g-3 mb-4">
+      <div className="home-module-grid mb-4">
         {moduleCards.map((item) => (
-          <Col md={6} xl={3} key={item.title}>
-            <Card className="module-card" role="button" onClick={() => navigate(item.path)}>
-              <Card.Body>
-                <div className="module-title">{item.title}</div>
-                <div className="module-desc">{item.desc}</div>
-              </Card.Body>
-            </Card>
-          </Col>
+          <Card className="module-card" role="button" key={item.title} onClick={() => navigate(item.path)}>
+            <Card.Body>
+              <div className="module-title">{item.title}</div>
+              <div className="module-desc">{item.desc}</div>
+            </Card.Body>
+          </Card>
         ))}
-      </Row>
+      </div>
 
       <Card className="home-command-card mb-4">
         <Card.Body>
